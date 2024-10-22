@@ -11,6 +11,9 @@ class MPMSolver:
         self.grid = grid
         self.time_step = time_step
 
+        # after rasterization
+        # grid.setup_particle_density_volume(p)
+
     def rasterize_particles_to_grid(self):
         # Transfer mass and velocity from particles to grid
         self.grid.clear()
