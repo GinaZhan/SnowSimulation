@@ -15,6 +15,7 @@ This folder contains the main source code of the project.
   - `particles.py`: Manages the particle system (Lagrangian particles).
   - `grid.py`: Implements the Eulerian grid for snow interactions with the environment.
   - `snow_material.py`: Defines the material properties of snow (e.g., plasticity, stickiness).
+  - `stress_forces.py`: Stress-based forces and constitutive relation logic
   
 - **`rendering/`**: Handles OpenGL-based real-time rendering of the snow simulation.
   - `opengl_renderer.py`: Implements the OpenGL renderer to visualize the snow simulation.
