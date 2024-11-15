@@ -3,15 +3,16 @@
 import numpy as np
 import warp as wp
 
-def polar_decomposition(F_E): # ???
-    # Perform polar decomposition to get rotation R_E and stretch S_E
-    U, S, Vt = np.linalg.svd(F_E)
-    R_E = U @ Vt
-    S_E = Vt.T @ np.diag(S) @ Vt  # Stretch matrix
+def polar_decomposition(F_E):
+    # Perform polar decomposition to get rotation matrix  R_E and stretch matrix S_E
+    # S is returned as a 1D array by np, we need to form a diagonal matrix from it
+    U, S, Vt = np.linalg.svd(F_E)   # left singular vectors, singular vectors, right singular vectors
+    R_E = U @ Vt                    # rotation matrix
+    S_E = Vt.T @ np.diag(S) @ Vt    # stretch matrix
     return R_E, S_E
 
-def plastic_deformation_thresholds(F_E, epsilon_c, epsilon_s): # ???
-    # Compute singular values of F_E
+def plastic_deformation_thresholds(F_E, epsilon_c, epsilon_s):
+    # Compute singular values of F_E - represent the amount of stretch or compression
     _, singular_values, _ = np.linalg.svd(F_E)
     
     # Check if singular values exceed the critical thresholds
@@ -23,7 +24,7 @@ def plastic_deformation_thresholds(F_E, epsilon_c, epsilon_s): # ???
 
 
 class Particle:
-    def __init__(self, position, velocity, mass):
+    def __init__(self, position, velocity, mass, mu_0, lambda_0, alpha):
         self.position = np.array(position)
         self.velocity = np.array(velocity)
         self.mass = mass
@@ -32,6 +33,9 @@ class Particle:
         self.FE = np.eye(3)  # Elastic part of deformation gradient - 3x3 identity matrix
         self.FP = np.eye(3)  # Plastic part of deformation gradient - 3x3 identity matrix
         self.density = 0
+        self.mu_0 = mu_0
+        self.lambda_0 = lambda_0
+        self.alpha = alpha
 
     def update_velocity(self, grid, time_step):
         # Interpolate velocity from grid nodes to particle
@@ -39,10 +43,10 @@ class Particle:
 
     def update_position(self, time_step):
         # Simple forward Euler update for position
-        self.position += self.velocity * time_step
+        self.position += self.velocity * time_step 
 
     def update_deformation_gradient(self, grid, time_step):
-        # Update deformation gradient based on velocity gradient from grid
+        # Step 7: Update deformation gradient based on velocity gradient from grid
         velocity_gradient = grid.compute_velocity_gradient(self.position)
         self.deformation_gradient = (np.eye(3) + time_step * velocity_gradient) @ self.deformation_gradient
 
@@ -58,7 +62,7 @@ class Particle:
     # def stress_tensor(self):
     #     pass
 
-    def stress_tensor(self): # ???
+    def stress_tensor(self):
         # Compute the determinants
         J_E = np.linalg.det(self.F_E)
         J_P = np.linalg.det(self.F_P)
@@ -73,8 +77,12 @@ class Particle:
         # Derivative of the elasto-plastic potential energy density function w.r.t. F_E
         dpsi_dF_E = 2 * mu * (self.F_E - R_E) + lambda_ * (J_E - 1) * J_E * np.linalg.inv(self.F_E).T
         
+        # Compute the total J = J_E * J_P
+        J = J_E * J_P
+        
         # Compute the Cauchy stress tensor
-        stress = (1 / J_E) * dpsi_dF_E @ self.F_E.T
+        stress = (1 / J) * dpsi_dF_E @ self.F_E.T
+    
         
         return stress
 
