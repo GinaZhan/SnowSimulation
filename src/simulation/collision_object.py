@@ -16,7 +16,11 @@ class CollisionObject:
         return self.level_set(position) <= 0
 
     def normal(self, position):
-        """Compute the normal vector n = ∇φ at the position."""
+        """
+        Compute the unit normal vector n = ∇φ at the position.
+        n is always perpendicular to the object surface.
+        n points outward from the surface.
+        """
         epsilon = 1e-5
         grad_phi = np.array([
             (self.level_set(position + np.array([epsilon, 0, 0])) - self.level_set(position)) / epsilon,
@@ -25,29 +29,33 @@ class CollisionObject:
         ])
         grad_phi_norm = np.linalg.norm(grad_phi)
 
-        # at the center of a sphere ???
+        # at the center of a sphere
         if grad_phi_norm == 0:
             return np.zeros(3)
         
         return grad_phi / grad_phi_norm
 
     def collision_response(self, velocity, position):
-        """Compute the new velocity after collision."""
+        """Compute the new velocity for snow after collision."""
         # Get the object's velocity and normal at the collision point
         v_co = self.velocity_function(position)
         n = self.normal(position)
         
         # Relative velocity in the collision object’s frame
         v_rel = velocity - v_co
+
+        # The normal component is the part of the velocity vector that is parallel to the surface's normal vector (scalar)
         vn = np.dot(v_rel, n)
         
         if vn >= 0:
-            # No collision (objects are separating)
+            # No collision (objects are separating or the snow is moving away from the surface)
             return velocity
-        
-        # Tangential component
+        # Otherwise, snow is going though the surface inward
+
+        # Tangential component is the part of the velocity vector that lies parallel to the surface
+        # ||vt|| > 0, slides on surface; otherwise, stick on surface
         vt = v_rel - n * vn
-        if np.linalg.norm(vt) <= self.friction_coefficient * abs(vn):
+        if np.linalg.norm(vt) <= (-1) * self.friction_coefficient * vn:
             # Stick condition
             v_rel_new = np.zeros(3)
         else:

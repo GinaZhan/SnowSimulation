@@ -3,7 +3,7 @@
 import numpy as np
 import warp as wp
 
-from constants import *
+from .constants import *
 
 def polar_decomposition(F_E):
     # Perform polar decomposition to get rotation matrix  R_E and stretch matrix S_E
@@ -26,7 +26,7 @@ def plastic_deformation_thresholds(F_E, epsilon_c, epsilon_s):
 
 
 class Particle:
-    def __init__(self, position, velocity, mass, mu_0, lambda_0, alpha):
+    def __init__(self, position, velocity, mass):
         self.position = np.array(position)
         self.velocity = np.array(velocity)
         self.mass = mass
@@ -34,10 +34,11 @@ class Particle:
         self.initial_volume = 1.0
         self.F_E = np.eye(3)  # Elastic part of deformation gradient - 3x3 identity matrix
         self.F_P = np.eye(3)  # Plastic part of deformation gradient - 3x3 identity matrix
+        self.deformation_gradient = np.eye(3)
         self.density = 0
-        self.mu_0 = mu_0
-        self.lambda_0 = lambda_0
-        self.alpha = alpha
+        self.mu_0 = MU
+        self.lambda_0 = LAMBDA
+        self.alpha = ALPHA # hardening parameter
 
     def position_x(self):
         return self.position[0]
@@ -47,9 +48,6 @@ class Particle:
     
     def position_z(self):
         return self.position[2]
-    
-    # def stress_tensor(self):
-    #     pass
 
     def stress_tensor(self):
         # Compute the determinants
@@ -131,15 +129,15 @@ class Particle:
         F_np1 = (I + time_step * rv_np1) @ self.deformation_gradient
 
         # Perform SVD on F^{n+1}_Ep = (I + Δt r v^{n+1}_p) F^n_Ep
-        U, S, Vt = np.linalg.svd(F_np1 @ self.plastic_gradient)
+        U, S, Vt = np.linalg.svd(F_np1 @ self.F_P)
         S_clamped = np.clip(S, 1 - CRIT_COMPRESS, 1 + CRIT_STRETCH)
 
         # Update elastic and plastic gradients
-        self.elastic_gradient = U @ np.diag(S_clamped) @ Vt
-        self.plastic_gradient = Vt.T @ np.diag(1.0 / S_clamped) @ U.T @ F_np1
+        self.F_E = U @ np.diag(S_clamped) @ Vt
+        self.F_P = Vt.T @ np.diag(1.0 / S_clamped) @ U.T @ F_np1
 
         # Update total deformation gradient
-        self.deformation_gradient = self.elastic_gradient @ self.plastic_gradient
+        self.deformation_gradient = self.F_E @ self.F_P
 
     def update_velocity(self, grid, alpha=0.95):
         # Step 8 - Update particle velocities
