@@ -20,10 +20,11 @@ class OpenGLRenderer:
 
         # Set up VAO and VBO for particles
         self.vao = glGenVertexArrays(1)
-        vbo = glGenBuffers(1)
-
         glBindVertexArray(self.vao)
-        glBindBuffer(GL_ARRAY_BUFFER, vbo)
+
+        # vbo = glGenBuffers(1)
+
+        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
         glBufferData(GL_ARRAY_BUFFER, self.particle_positions.nbytes, self.particle_positions, GL_STATIC_DRAW)
 
         # Configure vertex attributes
@@ -38,7 +39,7 @@ class OpenGLRenderer:
 
         # Set up camera
         self.camera = Camera(
-            position=[0.0, 0.0, 20.0],
+            position=[0.0, 0.0, 50.0],
             target=[0.0, 0.0, 0.0],
             up=[0.0, 1.0, 0.0],
             fov=45.0,

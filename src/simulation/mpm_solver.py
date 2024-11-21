@@ -15,7 +15,7 @@ class MPMSolver:
 
         self.collision_objects = [
             CollisionObject(
-                level_set=lambda x: x[2],  # Floor at z = 0
+                level_set=lambda x: x[1],  # Floor at z = 0
                 velocity_function=lambda x: np.zeros(3),  # Static floor
                 friction_coefficient=0.5
             )

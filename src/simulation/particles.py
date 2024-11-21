@@ -73,44 +73,44 @@ class Particle:
         
         return stress
     
-    def delta_force(F, r, weight_gradient, initial_volume, mu, lambda_, matrix_epsilon=1e-6):
-        # Step 6 - Implicit velocity update
-        """
-        Compute the incremental force (deltaForce) based on residual velocity.
-        """
-        # 1. Compute delta(F): Change in the deformation gradient
-        delta_F = TIMESTEP * np.outer(r, weight_gradient) @ F
+    # def delta_force(F, r, weight_gradient, initial_volume, mu, lambda_, matrix_epsilon=1e-6):
+    #     # Step 6 - Implicit velocity update
+    #     """
+    #     Compute the incremental force (deltaForce) based on residual velocity.
+    #     """
+    #     # 1. Compute delta(F): Change in the deformation gradient
+    #     delta_F = TIMESTEP * np.outer(r, weight_gradient) @ F
 
-        # Check small perturbations in delta_F
-        if np.abs(delta_F).max() < matrix_epsilon:
-            return np.zeros(3)
+    #     # Check small perturbations in delta_F
+    #     if np.abs(delta_F).max() < matrix_epsilon:
+    #         return np.zeros(3)
 
-        # 2. Polar decomposition of F to get R (rotation) and S (stretching)
-        U, S, Vt = np.linalg.svd(F)
-        polar_r = U @ Vt  # Rotation matrix
-        polar_s = Vt.T @ np.diag(S) @ Vt  # Symmetric stretch matrix
+    #     # 2. Polar decomposition of F to get R (rotation) and S (stretching)
+    #     U, S, Vt = np.linalg.svd(F)
+    #     polar_r = U @ Vt  # Rotation matrix
+    #     polar_s = Vt.T @ np.diag(S) @ Vt  # Symmetric stretch matrix
 
-        # 3. Compute delta(R): Change in rotation matrix
-        # Skew symmetric part of R^T delta(F) - delta(F)^T R
-        skew_sym = polar_r.T @ delta_F - delta_F.T @ polar_r
-        trace_s = np.trace(polar_s)  # Sum of diagonal entries of S
-        if trace_s == 0:  # Avoid division by zero
-            trace_s = matrix_epsilon
+    #     # 3. Compute delta(R): Change in rotation matrix
+    #     # Skew symmetric part of R^T delta(F) - delta(F)^T R
+    #     skew_sym = polar_r.T @ delta_F - delta_F.T @ polar_r
+    #     trace_s = np.trace(polar_s)  # Sum of diagonal entries of S
+    #     if trace_s == 0:  # Avoid division by zero
+    #         trace_s = matrix_epsilon
 
-        x = np.trace(skew_sym) / trace_s  # Solve for single value
-        delta_R = polar_r @ np.array([[0, -x, 0], [x, 0, 0], [0, 0, 0]])
+    #     x = np.trace(skew_sym) / trace_s  # Solve for single value
+    #     delta_R = polar_r @ np.array([[0, -x, 0], [x, 0, 0], [0, 0, 0]])
 
-        # 4. Compute cofactor matrix and delta(cofactor)
-        cofactor = np.linalg.inv(F.T) * np.linalg.det(F)  # Cofactor matrix of F
-        delta_cofactor = np.linalg.inv(delta_F.T) * np.linalg.det(delta_F)  # Approximation
+    #     # 4. Compute cofactor matrix and delta(cofactor)
+    #     cofactor = np.linalg.inv(F.T) * np.linalg.det(F)  # Cofactor matrix of F
+    #     delta_cofactor = np.linalg.inv(delta_F.T) * np.linalg.det(delta_F)  # Approximation
 
-        # 5. Compute A (force matrix) using the co-rotational term
-        stress_delta = 2 * mu * (delta_F - delta_R)  # Co-rotational term
-        stress_delta += lambda_ * np.trace(delta_F) * np.identity(3)  # Primary contour term
+    #     # 5. Compute A (force matrix) using the co-rotational term
+    #     stress_delta = 2 * mu * (delta_F - delta_R)  # Co-rotational term
+    #     stress_delta += lambda_ * np.trace(delta_F) * np.identity(3)  # Primary contour term
 
-        # 6. Combine everything to compute delta(force)
-        delta_force = initial_volume * stress_delta @ (F.T @ weight_gradient)
-        return delta_force
+    #     # 6. Combine everything to compute delta(force)
+    #     delta_force = initial_volume * stress_delta @ (F.T @ weight_gradient)
+    #     return delta_force
 
     def update_deformation_gradient(self, grid, time_step):
         # Step 7: Update deformation gradient based on velocity gradient from grid
@@ -148,6 +148,7 @@ class Particle:
             velocity_PIC += node.new_velocity * weight_ip
             velocity_FLIP += (node.new_velocity - node.velocity) * weight_ip
         self.velocity = (1 - alpha) * velocity_PIC + alpha * velocity_FLIP
+        print("Particle velocity: ", self.velocity)
 
     def apply_collision(self, collision_objects):
         # Step 9 - Particle-based body collisions

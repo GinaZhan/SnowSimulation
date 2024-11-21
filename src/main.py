@@ -19,13 +19,16 @@ def setup_simulation():
     # Example: Adding a single particle to the system
     # particle = Particle(position=[0.5, 0.5, 0.5], velocity=[0.0, 0.0, 0.0], mass=1.0, volume=1.0)
 
-    num_particles = 10
+    num_particles = 1
     radius = 1
     for _ in range(num_particles):
         pos = np.random.uniform(-radius, radius, 3)
         while np.linalg.norm(pos) > radius:
             pos = np.random.uniform(-radius, radius, 3)
         vel = np.zeros(3)
+        pos[0] += 11
+        pos[1] += 11
+        pos[2] += 11
         particle = Particle(position=pos, velocity=vel, mass=1.0)
         particle_system.add_particle(particle)
 
@@ -96,7 +99,7 @@ while not glfw.window_should_close(window):
     # Update particle positions in the shared array
     for i, particle in enumerate(solver.particle_system.particles):
         particle_positions[i] = particle.position
-        # print("Actual particle position:", particle.position)
+        print("Actual particle position:", particle.position)
 
     # Render the updated particle positions
     renderer.update_particle_positions(particle_positions)

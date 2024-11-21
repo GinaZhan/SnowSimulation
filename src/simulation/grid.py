@@ -4,17 +4,23 @@ import warp as wp
 from .particles import *
 from .constants import *
 
+# wp.init()
+
 GRAVITY = np.array([0.0, -9.8, 0.0])  # Gravity vector pointing down (negative Y-axis)
+# GRAVITY = wp.vec3(0.0, -9.8, 0.0)  # Gravity vector pointing down (negative Y-axis)
 
 def N(x):
     if np.abs(x) >= 0 and np.abs(x) < 1:
         result = 1/2*(np.abs(x))**3 - x**2 + 2/3
-        return result
     elif np.abs(x) >= 1 and np.abs(x) < 2:
         result = -1/6*(np.abs(x))**3 + x**2 - 2*np.abs(x) + 4/3
-        return result
     else:
         return 0
+    
+    if result < WEIGHT_EPSILON:
+        return 0
+    else:
+        return result
     
 def N_prime(x):
     if np.abs(x) >= 0 and np.abs(x) < 1:
@@ -27,7 +33,7 @@ def N_prime(x):
         return 0
 
 class GridNode:
-    def __init__(self, position, grid_space=1):
+    def __init__(self, position, grid_space=1.0):
         self.position = np.array(position)
         self.mass = 0.0
         self.velocity = np.zeros(3)     # 3D velocity
@@ -49,11 +55,14 @@ class GridNode:
         self.mass = 0.0
         self.velocity.fill(0)
         self.force.fill(0)
+        self.velocity_star.fill(0)
 
     def update_velocity_star(self):
         # Step 4
         if self.mass > 0:
             self.velocity_star = self.velocity + (self.force / self.mass + GRAVITY) * TIMESTEP # f = ma
+            # print("GridNode force: ", self.force)
+            # print("GridNode velocity: ", self.velocity_star)
 
     def compute_weight(self, particle):
         x_weight = N((particle.position_x() - self.position[0]*self.grid_space)/self.grid_space)
@@ -114,36 +123,50 @@ class Grid:
 
     def transfer_mass_and_velocity(self, particles):
         # Step 1 - Rasterize particle data to the grid - Transfer mass and velocity to grid nodes from particles
+
+        # self.clear()    # prevent nodes from collecting velocity, mass, force from previous steps
+
         for p in particles:
             nearby_nodes = self.get_nearby_nodes(p.position)
+            # total_weight = 0
             for node in nearby_nodes:
+            # for node in self.nodes:
                 dist = np.linalg.norm(p.position - node.position)
                 if dist > 2:
                     continue
 
                 weight_node_particle = node.compute_weight(p)
+                # total_weight += weight_node_particle
                 node.mass += p.mass * weight_node_particle
                 node.velocity += p.velocity * p.mass * weight_node_particle
-                # print("node mass has been updated in step 1")
+                # print("node mass has been updated in step 1: ", node.mass)
+
+            # print("Total weight: ", total_weight)
 
         for node in self.nodes:
             if node.mass > 0:
                 node.velocity /= node.mass
                 # print("node velocity has been updated in step 1")
+                # print("node mass has been updated in step 1: ", node.mass)
 
 
     def setup_particle_density_volume(self, particles):
         # Step 2 - Compute particle volumes and densities - first timestamp only
         # Here we don't reset node and particle density because this function is only called once at first timestamp
         for p in particles:
-            for node in self.nodes:
+            p.density = 0
+            nearby_nodes = self.get_nearby_nodes(p.position)
+            for node in nearby_nodes:
                 node.density = node.mass / node.grid_space**3
-                p.density += node.density * node.compute_weight(p)
+                weight = node.compute_weight(p)
+                if weight > WEIGHT_EPSILON:
+                    p.density += node.density * weight
 
             if p.density > 0:
                 p.initial_volume = p.mass / p.density
-                print("particle density has been updated in step 2")
+                # print("particle density has been updated in step 2")
             else:
+                # may cause issue; TODO: add small density value
                 raise ValueError("This particle has 0 density!")
 
     def compute_grid_forces(self, particles):
@@ -153,19 +176,20 @@ class Grid:
 
         for p in particles:
             stress_tensor = p.stress_tensor()
+            print("Stress tensor: ", stress_tensor)
             Jpn = np.linalg.det(p.deformation_gradient)
             Vpn = Jpn * p.initial_volume
 
-            for node in self.nodes:
+            for node in self.get_nearby_nodes(p.position):
                 weight_gradient = node.compute_weight_gradient(p)
                 node.force -= Vpn * stress_tensor @ weight_gradient
-        print("node force has been updated in step 3")
+        # print("node force has been updated in step 3")
 
     def update_grid_velocity_star(self):
         # Step 4 - Update grid velocity
         for node in self.nodes:
             node.update_velocity_star()
-        print("node star velocity has been updated in step 4")
+        # print("node star velocity has been updated in step 4")
 
     def apply_collisions(self, collision_objects):
         # Step 5
@@ -247,4 +271,4 @@ class Grid:
         # Step 6
         for node in self.nodes:
             node.new_velocity = node.velocity_star
-        print("node velocity has been updated in step 6")
+        # print("node velocity has been updated in step 6")
