@@ -55,6 +55,7 @@ class Particle:
         J_P = np.linalg.det(self.F_P)
         
         # Compute Lamé parameters with hardening
+
         mu = self.mu_0 * np.exp(self.alpha * (1 - J_P))
         lambda_ = self.lambda_0 * np.exp(self.alpha * (1 - J_P))
         
@@ -72,6 +73,30 @@ class Particle:
     
         
         return stress
+
+    # def stress_tensor(self):
+    #     # Compute the determinants of F_E (elastic deformation gradient) and F_P (plastic deformation gradient)
+    #     J_E = np.linalg.det(self.F_E)
+    #     J_P = np.linalg.det(self.F_P)
+
+    #     # Compute the exponential hardening factor
+    #     exp_factor = np.exp(self.alpha * (1 - J_P))
+
+    #     # Compute Lamé parameters with hardening
+    #     mu = self.mu_0 * exp_factor
+    #     lambda_ = self.lambda_0 * exp_factor
+
+    #     # Polar decomposition of F_E to obtain R_E
+    #     R_E, _ = polar_decomposition(self.F_E)
+
+    #     # Compute the first Piola-Kirchhoff stress tensor (P)
+    #     # P = 2 * mu * (F_E - R_E) @ F_E^T + lambda * (J_E - 1) * J_E * I
+    #     stress = (
+    #         2.0 * mu * (self.F_E - R_E) @ self.F_E.T
+    #         + lambda_ * (J_E - 1) * J_E * np.eye(3)
+    #     )
+
+    #     return stress  
     
     # def delta_force(F, r, weight_gradient, initial_volume, mu, lambda_, matrix_epsilon=1e-6):
     #     # Step 6 - Implicit velocity update
@@ -143,11 +168,13 @@ class Particle:
         # Step 8 - Update particle velocities
         velocity_PIC = np.zeros(3)
         velocity_FLIP = self.velocity
-        for node in grid.nodes:
+        nearby_nodes = grid.get_nearby_nodes(self.position)
+        for node in nearby_nodes:
             weight_ip = node.compute_weight(self)
             velocity_PIC += node.new_velocity * weight_ip
             velocity_FLIP += (node.new_velocity - node.velocity) * weight_ip
         self.velocity = (1 - alpha) * velocity_PIC + alpha * velocity_FLIP
+        self.velocity[np.abs(self.velocity) < 1e-6] = 0
         print("Particle velocity: ", self.velocity)
 
     def apply_collision(self, collision_objects):
@@ -155,6 +182,8 @@ class Particle:
         for obj in collision_objects:
             if obj.is_colliding(self.position):
                     self.velocity = obj.collision_response(self.velocity, self.position + TIMESTEP * self.velocity)
+                    self.velocity[np.abs(self.velocity) < 1e-6] = 0
+                    print("Particle velocity after collision: ", self.velocity)
                     break   # The first collision dominates
             # How to handle multiple collisions at the same time?
 

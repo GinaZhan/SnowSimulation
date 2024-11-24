@@ -41,12 +41,18 @@ class CollisionObject:
         v_co = self.velocity_function(position)
         n = self.normal(position)
         
+        
         # Relative velocity in the collision object’s frame
         v_rel = velocity - v_co
+        
 
         # The normal component is the part of the velocity vector that is parallel to the surface's normal vector (scalar)
         vn = np.dot(v_rel, n)
-        
+        if vn != 0:
+            print("Normal: ", n)
+            print("v_rel: ", v_rel)
+            print("vn: ", vn)
+
         if vn >= 0:
             # No collision (objects are separating or the snow is moving away from the surface)
             return velocity
@@ -57,9 +63,11 @@ class CollisionObject:
         vt = v_rel - n * vn
         if np.linalg.norm(vt) <= (-1) * self.friction_coefficient * vn:
             # Stick condition
+            print("Sticky")
             v_rel_new = np.zeros(3)
         else:
             # Apply dynamic friction
+            print("Dynamic")
             v_rel_new = vt + self.friction_coefficient * vn * vt / np.linalg.norm(vt)
         
         # Final velocity in world coordinates

@@ -27,7 +27,7 @@ def setup_simulation():
             pos = np.random.uniform(-radius, radius, 3)
         vel = np.zeros(3)
         pos[0] += 11
-        pos[1] += 11
+        pos[1] += 0.2
         pos[2] += 11
         particle = Particle(position=pos, velocity=vel, mass=1.0)
         particle_system.add_particle(particle)

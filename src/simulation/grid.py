@@ -197,6 +197,7 @@ class Grid:
         for node in self.nodes:
             for obj in collision_objects:
                 if obj.is_colliding(node.position):
+                    # print("Colliding when ", node.position)
                     node.velocity_star = obj.collision_response(node.velocity_star, node.position + TIMESTEP * node.velocity_star)
 
     # def recomputeImplicitForces(self, grid_nodes):
