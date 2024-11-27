@@ -49,54 +49,55 @@ class Particle:
     def position_z(self):
         return self.position[2]
 
-    def stress_tensor(self):
-        # Compute the determinants
-        J_E = np.linalg.det(self.F_E)
-        J_P = np.linalg.det(self.F_P)
+    def stress_tensor(self, use_cauchy=True):    
+        if use_cauchy:                      # TODO: this model is simplified, may have problem
+            # Compute the determinants
+            J_E = np.linalg.det(self.F_E)
+            J_P = np.linalg.det(self.F_P)
+            
+            # Compute Lamé parameters with hardening
+
+            mu = self.mu_0 * np.exp(self.alpha * (1 - J_P))
+            lambda_ = self.lambda_0 * np.exp(self.alpha * (1 - J_P))
+            
+            # Polar decomposition to get R_E
+            R_E, _ = polar_decomposition(self.F_E)
+            
+            # Derivative of the elasto-plastic potential energy density function w.r.t. F_E
+            dpsi_dF_E = 2 * mu * (self.F_E - R_E) + lambda_ * (J_E - 1) * J_E * np.linalg.inv(self.F_E).T
+            
+            # Compute the total J = J_E * J_P
+            J = J_E * J_P
+            
+            # Compute the Cauchy stress tensor
+            stress = (1 / J) * dpsi_dF_E @ self.F_E.T
         
-        # Compute Lamé parameters with hardening
+            
+            return stress
+        else:
+            # This one is even more simplified!
+            # Compute the determinants of F_E (elastic deformation gradient) and F_P (plastic deformation gradient)
+            J_E = np.linalg.det(self.F_E)
+            J_P = np.linalg.det(self.F_P)
 
-        mu = self.mu_0 * np.exp(self.alpha * (1 - J_P))
-        lambda_ = self.lambda_0 * np.exp(self.alpha * (1 - J_P))
-        
-        # Polar decomposition to get R_E
-        R_E, _ = polar_decomposition(self.F_E)
-        
-        # Derivative of the elasto-plastic potential energy density function w.r.t. F_E
-        dpsi_dF_E = 2 * mu * (self.F_E - R_E) + lambda_ * (J_E - 1) * J_E * np.linalg.inv(self.F_E).T
-        
-        # Compute the total J = J_E * J_P
-        J = J_E * J_P
-        
-        # Compute the Cauchy stress tensor
-        stress = (1 / J) * dpsi_dF_E @ self.F_E.T
-    
-        
-        return stress
+            # Compute the exponential hardening factor
+            exp_factor = np.exp(self.alpha * (1 - J_P))
 
-    # def stress_tensor(self):
-    #     # Compute the determinants of F_E (elastic deformation gradient) and F_P (plastic deformation gradient)
-    #     J_E = np.linalg.det(self.F_E)
-    #     J_P = np.linalg.det(self.F_P)
+            # Compute Lamé parameters with hardening
+            mu = self.mu_0 * exp_factor
+            lambda_ = self.lambda_0 * exp_factor
 
-    #     # Compute the exponential hardening factor
-    #     exp_factor = np.exp(self.alpha * (1 - J_P))
+            # Polar decomposition of F_E to obtain R_E
+            R_E, _ = polar_decomposition(self.F_E)
 
-    #     # Compute Lamé parameters with hardening
-    #     mu = self.mu_0 * exp_factor
-    #     lambda_ = self.lambda_0 * exp_factor
+            # Compute the first Piola-Kirchhoff stress tensor (P)
+            # P = 2 * mu * (F_E - R_E) @ F_E^T + lambda * (J_E - 1) * J_E * I
+            stress = (
+                2.0 * mu * (self.F_E - R_E) @ self.F_E.T
+                + lambda_ * (J_E - 1) * J_E * np.eye(3)
+            )
 
-    #     # Polar decomposition of F_E to obtain R_E
-    #     R_E, _ = polar_decomposition(self.F_E)
-
-    #     # Compute the first Piola-Kirchhoff stress tensor (P)
-    #     # P = 2 * mu * (F_E - R_E) @ F_E^T + lambda * (J_E - 1) * J_E * I
-    #     stress = (
-    #         2.0 * mu * (self.F_E - R_E) @ self.F_E.T
-    #         + lambda_ * (J_E - 1) * J_E * np.eye(3)
-    #     )
-
-    #     return stress  
+            return stress  
     
     # def delta_force(F, r, weight_gradient, initial_volume, mu, lambda_, matrix_epsilon=1e-6):
     #     # Step 6 - Implicit velocity update
@@ -150,16 +151,22 @@ class Particle:
             weight_gradient = node.compute_weight_gradient(self)
             rv_np1 += np.outer(node.velocity, weight_gradient)
 
+        # Update F_E^{n+1}_p
+        F_Epn1 = (I + time_step * rv_np1) @ self.F_E
+
         # Update F^{n+1}_p
         F_np1 = (I + time_step * rv_np1) @ self.deformation_gradient
 
-        # Perform SVD on F^{n+1}_Ep = (I + Δt r v^{n+1}_p) F^n_Ep
-        U, S, Vt = np.linalg.svd(F_np1 @ self.F_P)
-        S_clamped = np.clip(S, 1 - CRIT_COMPRESS, 1 + CRIT_STRETCH)
+        if plastic_deformation_thresholds(F_Epn1, CRIT_COMPRESS, CRIT_STRETCH):
+            # Perform SVD on F^{n+1}_Ep = (I + Δt r v^{n+1}_p) F^n_Ep
+            U, S, Vt = np.linalg.svd(F_Epn1)
+            S_clamped = np.clip(S, 1 - CRIT_COMPRESS, 1 + CRIT_STRETCH)
 
-        # Update elastic and plastic gradients
-        self.F_E = U @ np.diag(S_clamped) @ Vt
-        self.F_P = Vt.T @ np.diag(1.0 / S_clamped) @ U.T @ F_np1
+            # Update elastic and plastic gradients
+            self.F_E = U @ np.diag(S_clamped) @ Vt
+            self.F_P = Vt.T @ np.diag(1.0 / S_clamped) @ U.T @ F_np1
+        else:
+            self.F_E = F_Epn1
 
         # Update total deformation gradient
         self.deformation_gradient = self.F_E @ self.F_P
