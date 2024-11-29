@@ -19,24 +19,38 @@ import warp as wp
 
 wp.init()
 
+# @wp.kernel
+# def test_kernel(arr: wp.array(dtype=wp.vec3)):
+#     tid = wp.tid()
+#     arr[tid] = wp.vec3(1.0, 2.0, 3.0)
+
+# # Create an array of wp.vec3
+# data = wp.array(
+#     data=[wp.vec3(0.0, 0.0, 0.0) for _ in range(10)],
+#     dtype=wp.vec3,
+#     device="cuda",
+# )
+
+# # Launch the kernel
+# wp.launch(test_kernel, dim=10, inputs=[data])
+
+# # Retrieve the results
+# result = data.numpy()
+# print(result)
+
 @wp.kernel
-def test_kernel(arr: wp.array(dtype=wp.vec3)):
+def modify_array(arr: wp.array(dtype=float)):
     tid = wp.tid()
-    arr[tid] = wp.vec3(1.0, 2.0, 3.0)
+    arr[tid] += 10.0
 
-# Create an array of wp.vec3
-data = wp.array(
-    data=[wp.vec3(0.0, 0.0, 0.0) for _ in range(10)],
-    dtype=wp.vec3,
-    device="cuda",
-)
+# Initialize a Warp array
+arr = wp.array([1.0, 2.0, 3.0], dtype=float, device="cuda")
 
-# Launch the kernel
-wp.launch(test_kernel, dim=10, inputs=[data])
+# Launch kernel
+wp.launch(kernel=modify_array, dim=len(arr), inputs=[arr])
 
-# Retrieve the results
-result = data.numpy()
-print(result)
+# Print the modified array
+print(arr.numpy())
 
 # @wp.kernel
 # def simple_kernel(a: wp.array(dtype=wp.vec3),
