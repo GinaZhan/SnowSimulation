@@ -90,6 +90,9 @@ class OpenGLRenderer:
         glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "view"), 1, GL_TRUE, view)
         glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "projection"), 1, GL_TRUE, projection)
 
+        # Set point size
+        glPointSize(5)  # Adjust the size of the particles as desired
+
         # Draw particles
         glBindVertexArray(self.vao)
         print("Render position: ", self.particle_positions)

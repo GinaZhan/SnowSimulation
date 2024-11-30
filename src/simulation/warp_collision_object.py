@@ -1,4 +1,4 @@
-# import numpy as np
+import numpy as np
 import warp as wp
 
 
@@ -20,7 +20,7 @@ def collision_response(
 
     # Compute tangential velocity
     vt = v_rel - normal * vn
-    if wp.length(vt) <= (-1) * friction_coefficient * vn:
+    if wp.length(vt) <= (-1.0) * friction_coefficient * vn:
         # Stick condition
         v_rel_new = wp.vec3(0.0, 0.0, 0.0)
     else:
@@ -69,9 +69,9 @@ class CollisionObject:
 
     def is_colliding(self, position):
         """Check if the position is colliding (φ <= 0)."""
-        return self.level_set(position) <= 0
+        return self.level_set(position) <= 0.0
 
-    def compute_normal(position: wp.vec3, level_set: wp.func) -> wp.vec3:
+    def compute_normal(self, position):
         """
         Compute the unit normal vector n = ∇φ at the position.
         n is always perpendicular to the object surface.
@@ -79,9 +79,9 @@ class CollisionObject:
         """
         epsilon = 1e-5
 
-        grad_phi_x = (level_set(position + wp.vec3(epsilon, 0.0, 0.0)) - level_set(position)) / epsilon
-        grad_phi_y = (level_set(position + wp.vec3(0.0, epsilon, 0.0)) - level_set(position)) / epsilon
-        grad_phi_z = (level_set(position + wp.vec3(0.0, 0.0, epsilon)) - level_set(position)) / epsilon
+        grad_phi_x = (self.level_set(position + wp.vec3(epsilon, 0.0, 0.0)) - self.level_set(position)) / epsilon
+        grad_phi_y = (self.level_set(position + wp.vec3(0.0, epsilon, 0.0)) - self.level_set(position)) / epsilon
+        grad_phi_z = (self.level_set(position + wp.vec3(0.0, 0.0, epsilon)) - self.level_set(position)) / epsilon
 
         grad_phi = wp.vec3(grad_phi_x, grad_phi_y, grad_phi_z)
         grad_phi_norm = wp.length(grad_phi)
@@ -97,13 +97,20 @@ class CollisionObject:
         Precompute collision data for a given set of positions.
         """
         num_particles = len(input_positions)
-        level_set_values = wp.zeros(num_particles, dtype=float, device="cuda")
-        normals = wp.zeros(num_particles, dtype=wp.vec3, device="cuda")
-        velocities = wp.zeros(num_particles, dtype=wp.vec3, device="cuda")
+        
+        # Use NumPy arrays for modification
+        level_set_values_np = np.zeros(num_particles, dtype=np.float32)
+        normals_np = np.zeros((num_particles, 3), dtype=np.float32)
+        velocities_np = np.zeros((num_particles, 3), dtype=np.float32)
 
         for i, pos in enumerate(input_positions):
-            level_set_values[i] = self.level_set(pos)
-            normals[i] = self.compute_normal(pos, self.level_set)
-            velocities[i] = self.velocity_function(pos)
+            level_set_values_np[i] = self.level_set(pos)
+            normals_np[i] = self.compute_normal(pos)
+            velocities_np[i] = self.velocity_function(pos)
+
+        # Convert to Warp arrays
+        level_set_values = wp.array(level_set_values_np, dtype=float, device="cuda")
+        normals = wp.array(normals_np, dtype=wp.vec3, device="cuda")
+        velocities = wp.array(velocities_np, dtype=wp.vec3, device="cuda")
 
         return level_set_values, normals, velocities

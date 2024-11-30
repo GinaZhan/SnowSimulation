@@ -55,13 +55,17 @@ class MPMSolver:
         self.particle_system.update_deformation_gradients(self.grid)
         print("Step 7")
         # Step 8
+        print("Before Updating Velocities: ", self.particle_system.velocities)
         self.particle_system.update_velocity(self.grid)
+        print("After Updating Velocities: ", self.particle_system.velocities)
         print("Step 8")
         # Step 9
         self.particle_system.apply_collisions(self.collision_objects)
+        # print("Before Updating Position: ", self.particle_system.positions)
         print("Step 9")
         # Step 10
         self.particle_system.update_position()
+        # print("After Updating Position: ", self.particle_system.positions)
         print("Step 10")
 
     def run_time_step(self):

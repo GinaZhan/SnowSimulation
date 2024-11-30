@@ -1,9 +1,9 @@
-# import numpy as np
+import numpy as np
 import warp as wp
 
 from .warp_particles import ParticleSystem
 from .constants import *
-from .warp_collision_object import CollisionObject
+from .warp_collision_object import apply_collision_kernel
 
 wp.init()
 
@@ -283,6 +283,16 @@ def explicit_update_velocity_kernel(
     tid = wp.tid()
     grid_new_velocities[tid] = grid_velocities_star[tid]
 
+@wp.kernel
+def update_predicted_positions_kernel(
+    positions: wp.array(dtype=wp.vec3),
+    velocities: wp.array(dtype=wp.vec3),
+    timestep: float,
+    predicted_positions: wp.array(dtype=wp.vec3)):
+
+    tid = wp.tid()  # Thread ID for the current particle
+    predicted_positions[tid] = positions[tid] + velocities[tid] * timestep
+
 class Grid:
     def __init__(self, size, grid_space=1.0):
         # Initialize a grid with a given size
@@ -366,7 +376,23 @@ class Grid:
     
     def compute_grid_forces(self, particle_system: ParticleSystem):
         # Step 3
+        
+        # nan_count = count_nan_values_in_array(particle_system.initial_volumes)
+        # print(f"Number of NaN values in particle_system.initial_volumes: {nan_count}")
+        
+        # nan_count = count_nan_values_in_array(particle_system.stresses)
+        # print(f"Number of NaN values in particle_system.stresses: {nan_count}")
+        # nan_count = count_nan_values_in_array(self.positions)
+        # print(f"Number of NaN values in grid_positions: {nan_count}")
+        # nan_count = count_nan_values_in_array(self.forces)
+        # print(f"Number of NaN values in grid_forces: {nan_count}")
+
         particle_system.compute_stress_tensors()
+
+        # nan_count = count_nan_values_in_array(particle_system.positions)
+        # print(f"Number of NaN values in particle_system.positions: {nan_count}")
+        # print(particle_system.stresses)     
+        # print(particle_system.initial_volumes)
 
         wp.launch(
             kernel=compute_grid_forces_kernel,
@@ -374,46 +400,67 @@ class Grid:
             inputs=[
                 particle_system.positions,
                 particle_system.initial_volumes,
-                particle_system.stresses,
+                particle_system.stresses,       # This contains nan
                 self.positions,
                 self.forces,
                 self.size,
                 self.grid_space,
             ],
         )
+        nan_count = count_nan_values_in_array(self.forces)
+        print(f"Number of NaN values in grid_forces: {nan_count}")
 
     def update_grid_velocity_star(self):
         # Step 4 - Update grid velocity
+        # nan_count = count_nan_values_in_array(self.velocities)
+        # print(f"Number of NaN values in grid_velocities: {nan_count}")
+        # nan_count = count_nan_values_in_array(self.velocities_star)
+        # print(f"Number of NaN values in grid_velocities_star: {nan_count}")
+        # nan_count = count_nan_values_in_array(self.forces)
+        # print(f"Number of NaN values in grid_forces: {nan_count}")
+        # # nan_count = count_nan_values_in_array(self.mass)
+        # # print(f"Number of NaN values in grid_mass: {nan_count}")
+        # print("Gravity: ", GRAVITY)
+        # print("Timestep: ", TIMESTEP)
         wp.launch(
             kernel=update_velocity_star_kernel,
             dim=self.size**3,
             inputs=[
                 self.velocities,
                 self.velocities_star,
-                self.forces,
+                self.forces,        # This one has nan value
                 self.mass,
                 GRAVITY,
                 TIMESTEP
             ]
         )
+        # nan_count = count_nan_values_in_array(self.velocities_star)
+        # print(f"Number of NaN values in grid_velocities_star: {nan_count}")
 
     def apply_collisions(self, collision_objects):
         # Step 5
         """Apply collisions to each grid node's velocity based on collision objects."""
-        for node in self.nodes:
-            for obj in collision_objects:
-                if obj.is_colliding(node.position):
-                    # print("Colliding when ", node.position)
-                    node.velocity_star = obj.collision_response(node.velocity_star, node.position + TIMESTEP * node.velocity_star)
+        # nan_count = count_nan_values_in_array(self.velocities_star)
+        # print(f"Number of NaN values in grid_velocities_star: {nan_count}")
+        # for node in self.nodes:
+        #     for obj in collision_objects:
+        #         if obj.is_colliding(node.position):
+        #             # print("Colliding when ", node.position)
+        #             node.velocity_star = obj.collision_response(node.velocity_star, node.position + TIMESTEP * node.velocity_star)
 
         num_grids = self.size**3
         num_objects = len(collision_objects)
 
-        # Initialize 2D Warp arrays for collision data
-        level_set_values = wp.zeros((num_grids, num_objects), dtype=float, device="cuda")
-        normals = wp.zeros((num_grids, num_objects), dtype=wp.vec3, device="cuda")
-        velocities = wp.zeros((num_grids, num_objects), dtype=wp.vec3, device="cuda")
-        friction_coefficients = wp.zeros(num_objects, dtype=float, device="cuda")
+        # # Initialize 2D Warp arrays for collision data
+        # level_set_values = wp.zeros((num_grids, num_objects), dtype=float, device="cuda")
+        # normals = wp.zeros((num_grids, num_objects), dtype=wp.vec3, device="cuda")
+        # velocities = wp.zeros((num_grids, num_objects), dtype=wp.vec3, device="cuda")
+        # friction_coefficients = wp.zeros(num_objects, dtype=float, device="cuda")
+
+        level_set_values_np = np.zeros((num_grids, num_objects), dtype=np.float32)
+        normals_np = np.zeros((num_grids, num_objects, 3), dtype=np.float32)
+        velocities_np = np.zeros((num_grids, num_objects, 3), dtype=np.float32)
+        friction_coefficients_np = np.zeros(num_objects, dtype=np.float32)
 
         # Estimate future positions based on current velocities
         predicted_positions = wp.zeros_like(self.positions)
@@ -423,13 +470,28 @@ class Grid:
             inputs=[self.positions, self.velocities_star, TIMESTEP, predicted_positions],
         )
 
-        # Precompute collision data for each object
+        # # Precompute collision data for each object
+        # for i, obj in enumerate(collision_objects):
+        #     lv, n, v = obj.precompute_for_kernel(predicted_positions.numpy()) # .numpy() is needed here because Warp arrays do not support direct indexing
+        #     level_set_values[:, i] = lv
+        #     normals[:, i] = n
+        #     velocities[:, i] = v
+        #     friction_coefficients[i] = obj.friction_coefficient
+
+        
+
         for i, obj in enumerate(collision_objects):
-            lv, n, v = obj.precompute_for_kernel(predicted_positions) # TODO: Should I use .numpy() here?
-            level_set_values[:, i] = lv
-            normals[:, i] = n
-            velocities[:, i] = v
-            friction_coefficients[i] = obj.friction_coefficient
+            lv, n, v = obj.precompute_for_kernel(predicted_positions.numpy())
+            level_set_values_np[:, i] = lv.numpy()
+            normals_np[:, i, :] = n.numpy()
+            velocities_np[:, i, :] = v.numpy()
+            friction_coefficients_np[i] = obj.friction_coefficient
+
+        # Flatten the arrays for Warp
+        level_set_values = wp.array(level_set_values_np.reshape(num_grids, num_objects), dtype=float, device="cuda")
+        normals = wp.array(normals_np.reshape(num_grids, num_objects, 3), dtype=wp.vec3, device="cuda")
+        velocities = wp.array(velocities_np.reshape(num_grids, num_objects, 3), dtype=wp.vec3, device="cuda")
+        friction_coefficients = wp.array(friction_coefficients_np, dtype=float, device="cuda")
 
         # Launch the kernel
         wp.launch(
@@ -444,11 +506,44 @@ class Grid:
             ],
         )
 
+        # nan_count = count_nan_values_in_array(self.velocities_star)
+        # print(f"Number of NaN values in grid_velocities_star: {nan_count}")
+
     def explicit_update_velocity(self):
         # Step 6
+        # nan_count = count_nan_values_in_array(self.new_velocities)
+        # print(f"Number of NaN values in grid_new_velocities: {nan_count}")
+        # nan_count = count_nan_values_in_array(self.velocities_star)
+        # print(f"Number of NaN values in grid_velocities_star: {nan_count}")
         wp.launch(
             kernel=explicit_update_velocity_kernel,
             dim=self.size**3,
             inputs=[self.new_velocities, self.velocities_star],
         )
+        # nan_count = count_nan_values_in_array(self.new_velocities)
+        # print(f"Number of NaN values in grid_new_velocities: {nan_count}")
 
+def count_nan_values_in_array(array: wp.array):
+    num_elements = array.shape[0]
+
+    # Create a Warp array to store the count
+    nan_count = wp.zeros(1, dtype=int, device="cuda")
+
+    # Launch the kernel
+    wp.launch(
+        kernel=count_nan_values_kernel,
+        dim=num_elements,
+        inputs=[array, nan_count],
+    )
+
+    # Copy the count back to CPU and return
+    return nan_count.numpy()[0]
+
+@wp.kernel
+def count_nan_values_kernel(data: wp.array(dtype=wp.vec3), count: wp.array(dtype=int)):
+    tid = wp.tid()
+    value = data[tid]
+
+    # Check if any component is NaN
+    if wp.isnan(value[0]) or wp.isnan(value[1]) or wp.isnan(value[2]):
+        wp.atomic_add(count, 0, 1)  # Increment count at index 0

@@ -38,19 +38,19 @@ wp.init()
 # result = data.numpy()
 # print(result)
 
-@wp.kernel
-def modify_array(arr: wp.array(dtype=float)):
-    tid = wp.tid()
-    arr[tid] += 10.0
+# @wp.kernel
+# def modify_array(arr: wp.array(dtype=float)):
+#     tid = wp.tid()
+#     arr[tid] += 10.0
 
-# Initialize a Warp array
-arr = wp.array([1.0, 2.0, 3.0], dtype=float, device="cuda")
+# # Initialize a Warp array
+# arr = wp.array([1.0, 2.0, 3.0], dtype=float, device="cuda")
 
-# Launch kernel
-wp.launch(kernel=modify_array, dim=len(arr), inputs=[arr])
+# # Launch kernel
+# wp.launch(kernel=modify_array, dim=len(arr), inputs=[arr])
 
-# Print the modified array
-print(arr.numpy())
+# # Print the modified array
+# print(arr.numpy())
 
 # @wp.kernel
 # def simple_kernel(a: wp.array(dtype=wp.vec3),
@@ -69,3 +69,6 @@ print(arr.numpy())
 
 #     # write result back to memory
 #     c[tid] = r
+
+test = wp.identity(3, dtype=wp.float32)
+print(test)
