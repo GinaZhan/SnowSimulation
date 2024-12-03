@@ -198,7 +198,7 @@ def update_deformation_gradient_kernel(
     grid_positions: wp.array(dtype=wp.vec3),
     grid_velocities: wp.array(dtype=wp.vec3),
     grid_size: int,
-    grid_spacing: float,
+    grid_space: float,
     timestep: float,
     crit_compress: float,
     crit_stretch: float):
@@ -213,9 +213,9 @@ def update_deformation_gradient_kernel(
 
     # Compute grid center index for this particle
     grid_center = wp.vec3(
-        wp.floor(particle_pos[0] / grid_spacing),
-        wp.floor(particle_pos[1] / grid_spacing),
-        wp.floor(particle_pos[2] / grid_spacing),
+        wp.floor(particle_pos[0] / grid_space),
+        wp.floor(particle_pos[1] / grid_space),
+        wp.floor(particle_pos[2] / grid_space),
     )
 
     # Loop over nearby grid nodes
@@ -237,14 +237,14 @@ def update_deformation_gradient_kernel(
                 node_idx = int(grid_idx[0]) * grid_size*grid_size + int(grid_idx[1]) * grid_size + int(grid_idx[2])
 
                 # Compute weight gradient
-                dx = (particle_pos[0] - grid_positions[node_idx][0]) / grid_spacing
-                dy = (particle_pos[1] - grid_positions[node_idx][1]) / grid_spacing
-                dz = (particle_pos[2] - grid_positions[node_idx][2]) / grid_spacing
+                dx = (particle_pos[0] - grid_positions[node_idx][0]*grid_space) / grid_space
+                dy = (particle_pos[1] - grid_positions[node_idx][1]*grid_space) / grid_space
+                dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space) / grid_space
 
                 weight_gradient = wp.vec3(
-                    (1.0 / grid_spacing) * N_prime(dx) * N(dy) * N(dz),
-                    (1.0 / grid_spacing) * N(dx) * N_prime(dy) * N(dz),
-                    (1.0 / grid_spacing) * N(dx) * N(dy) * N_prime(dz),
+                    (1.0 / grid_space) * N_prime(dx) * N(dy) * N(dz),
+                    (1.0 / grid_space) * N(dx) * N_prime(dy) * N(dz),
+                    (1.0 / grid_space) * N(dx) * N(dy) * N_prime(dz),
                 )
 
                 # Accumulate velocity gradient
@@ -293,7 +293,7 @@ def update_particle_velocity_kernel(
     grid_velocities: wp.array(dtype=wp.vec3),
     grid_new_velocities: wp.array(dtype=wp.vec3),
     grid_size: int,
-    grid_spacing: float,
+    grid_space: float,
     alpha: float):
 
     tid = wp.tid()
@@ -307,9 +307,9 @@ def update_particle_velocity_kernel(
 
     # Compute grid center index for this particle
     grid_center = wp.vec3(
-        wp.floor(particle_pos[0] / grid_spacing),
-        wp.floor(particle_pos[1] / grid_spacing),
-        wp.floor(particle_pos[2] / grid_spacing),
+        wp.floor(particle_pos[0] / grid_space),
+        wp.floor(particle_pos[1] / grid_space),
+        wp.floor(particle_pos[2] / grid_space),
     )
 
     # print("Particle Position:")
@@ -336,9 +336,9 @@ def update_particle_velocity_kernel(
                 node_idx = int(grid_idx[0]) * grid_size*grid_size + int(grid_idx[1]) * grid_size + int(grid_idx[2])
 
                 # Compute weight
-                dx = (particle_pos[0] - grid_positions[node_idx][0]) / grid_spacing
-                dy = (particle_pos[1] - grid_positions[node_idx][1]) / grid_spacing
-                dz = (particle_pos[2] - grid_positions[node_idx][2]) / grid_spacing
+                dx = (particle_pos[0] - grid_positions[node_idx][0]*grid_space) / grid_space
+                dy = (particle_pos[1] - grid_positions[node_idx][1]*grid_space) / grid_space
+                dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space) / grid_space
 
                 weight = N(dx) * N(dy) * N(dz)
 

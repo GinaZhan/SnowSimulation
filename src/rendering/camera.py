@@ -2,13 +2,13 @@ import numpy as np
 
 class Camera:
     def __init__(self, position, target, up, fov, aspect, near, far):
-        self.position = np.array(position, dtype=np.float32)
-        self.target = np.array(target, dtype=np.float32)
-        self.up = np.array(up, dtype=np.float32)
-        self.fov = fov
-        self.aspect = aspect
-        self.near = near
-        self.far = far
+        self.position = np.array(position, dtype=np.float32)    # camera's position
+        self.target = np.array(target, dtype=np.float32)        # camera's target
+        self.up = np.array(up, dtype=np.float32)                # up direction
+        self.fov = fov                                          # field of view angle, in degrees
+        self.aspect = aspect                                    # aspect ratio of the camera, width/height of the screen
+        self.near = near                                        # near plane for rendering
+        self.far = far                                          # far plane for rendering
 
     def get_view_matrix(self):
         # LookAt matrix

@@ -40,7 +40,8 @@ def N_prime(x: float) -> float:
 def initialize_positions_kernel(
     positions: wp.array(dtype=wp.vec3),
     grid_size: int,
-    grid_spacing: float):
+    grid_space: float):
+    # Grid position is actually grid index
     
     tid = wp.tid()  # Thread ID for the current grid node
 
@@ -50,7 +51,8 @@ def initialize_positions_kernel(
     x = tid % grid_size
 
     # Set the position of the grid node
-    positions[tid] = wp.vec3(float(x), float(y), float(z)) * grid_spacing
+    # positions[tid] = wp.vec3(float(x), float(y), float(z)) * grid_space
+    positions[tid] = wp.vec3(float(x), float(y), float(z))
 
 @wp.kernel
 def update_velocity_star_kernel(
@@ -185,6 +187,7 @@ def setup_particle_density_volume_kernel(
     grid_masses: wp.array(dtype=float),
     grid_space: float,
     grid_size: int,
+    weight_epsilon: float
 ):
     tid = wp.tid()
     particle_pos = particle_positions[tid]
@@ -215,13 +218,14 @@ def setup_particle_density_volume_kernel(
                 dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space) / grid_space
 
                 weight = N(dx) * N(dy) * N(dz)
-                particle_density += grid_masses[node_idx] * weight
+                if weight > weight_epsilon:
+                    particle_density += grid_masses[node_idx] / (grid_space * grid_space * grid_space) * weight
 
     particle_densities[tid] = particle_density
     if particle_density > 0.0:
         particle_volumes[tid] = particle_masses[tid] / particle_density
     else:
-        particle_volumes[tid] = 0.0  # Or small positive value to avoid divide-by-zero
+        particle_volumes[tid] = 0.0  # TODO: Or small positive value to avoid divide-by-zero???
 
 @wp.kernel
 def compute_grid_forces_kernel(
@@ -371,6 +375,7 @@ class Grid:
                 self.mass,
                 self.grid_space,
                 self.size,
+                WEIGHT_EPSILON
             ],
         )
     

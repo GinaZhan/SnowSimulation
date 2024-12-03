@@ -14,11 +14,12 @@ import numpy as np
 import warp as wp
 
 def setup_simulation():
-    num_particles = 10000
+    num_particles = 8000    # There should be 4-8 particles in one GridNode
 
     # Initialize particle system and grid
     # particle_system = ParticleSystem(num_particles)
-    grid = Grid(size=64)
+    grid = Grid(size=64, grid_space=GRID_SPACE)
+    # grid = Grid(size=64)
 
     radius = 1
     # positions = wp.zeros((num_particles, 3), dtype=wp.vec3, device="cuda")
@@ -31,9 +32,9 @@ def setup_simulation():
         pos = np.random.uniform(-radius, radius, 3)
         while np.linalg.norm(pos) > radius:
             pos = np.random.uniform(-radius, radius, 3)
-        pos[0] += 11
+        pos[0] += 3
         pos[1] += 1.2
-        pos[2] += 11
+        pos[2] += 3
         pos_list.append(pos)
 
     positions = wp.array([wp.vec3(*p) for p in pos_list], dtype=wp.vec3, device="cuda")
