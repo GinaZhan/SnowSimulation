@@ -16,9 +16,12 @@ from PIL import Image
 import os
 import OpenGL.GL as gl
 import time
+import json
+import pickle
 
+NEW_SIMULATION = True
 
-frames_dir = "simulation_results/one_cube1"
+frames_dir = "simulation_results/one_cube0.1_1000_cauchy"
 os.makedirs(frames_dir, exist_ok=True)
 
 def save_rendered_frame(frame_id, window):
@@ -48,15 +51,51 @@ def save_rendered_frame(frame_id, window):
     return
     # raise RuntimeError(f"Failed to save frame{frame_id:04d} after 10 attempts.")
 
+def save_simulation_state(frame_id, solver, file_path="simulation_state.pkl"):
+    state = {
+        "frame_id": frame_id,
+        "num_particles": solver.particle_system.num_particles,
+        "positions": solver.particle_system.positions.numpy(),
+        "velocities": solver.particle_system.velocities.numpy(),
+        "masses": solver.particle_system.masses.numpy(),
+        "initial_volumes": solver.particle_system.initial_volumes.numpy(),
+        "F_E": solver.particle_system.F_E.numpy(),
+        "F_P": solver.particle_system.F_P.numpy(),
+        "deformation_gradient": solver.particle_system.deformation_gradient.numpy(),
+        "densities": solver.particle_system.densities.numpy(),
+        "stresses": solver.particle_system.stresses.numpy(),
+        # Add grid-specific state here if needed
+    }
+    with open(file_path, "wb") as f:
+        pickle.dump(state, f)
+    print(f"Simulation state saved at frame {frame_id}")
+
+def load_simulation_state(solver, file_path="simulation_state.pkl"):
+    with open(file_path, "rb") as f:
+        state = pickle.load(f)
+    solver.particle_system.num_particles = state["num_particles"]
+    solver.particle_system.positions = wp.array(state["positions"], dtype=wp.vec3, device="cuda")
+    solver.particle_system.velocities = wp.array(state["velocities"], dtype=wp.vec3, device="cuda")
+    solver.particle_system.masses = wp.array(state["masses"], dtype=float, device="cuda")
+    solver.particle_system.initial_volumes = wp.array(state["initial_volumes"], dtype=float, device="cuda")
+    solver.particle_system.F_E = wp.array(state["F_E"], dtype=wp.mat33, device="cuda")
+    solver.particle_system.F_P = wp.array(state["F_P"], dtype=wp.mat33, device="cuda")
+    solver.particle_system.deformation_gradient = wp.array(state["deformation_gradient"], dtype=wp.mat33, device="cuda")
+    solver.particle_system.densities = wp.array(state["densities"], dtype=float, device="cuda")
+    solver.particle_system.stresses = wp.array(state["stresses"], dtype=wp.mat33, device="cuda")
+    print(f"Simulation state loaded from frame {state['frame_id']}")
+    return state["frame_id"]
+
+
 def setup_simulation():
-    num_particles = 8000    # There should be 4-8 particles in one GridNode
+    num_particles = 1000    # There should be 4-8 particles in one GridNode
 
     # Initialize particle system and grid
     # particle_system = ParticleSystem(num_particles)
     grid = Grid(size=64, grid_space=GRID_SPACE)
     # grid = Grid(size=64)
 
-    radius = 1
+    radius = 0.5
     # positions = wp.zeros((num_particles, 3), dtype=wp.vec3, device="cuda")
     velocities = wp.zeros(num_particles, dtype=wp.vec3, device="cuda")
     pos_list = []
@@ -68,7 +107,7 @@ def setup_simulation():
         # while np.linalg.norm(pos) > radius:
         #     pos = np.random.uniform(-radius, radius, 3)
         pos[0] += 3
-        pos[1] += 5.2
+        pos[1] += 5
         pos[2] += 3
         pos_list.append(pos)
 
@@ -110,19 +149,24 @@ solver = setup_simulation()
 # Generate dummy particle positions for testing
 # particle_positions = np.random.uniform(-1, 1, (1000, 3)).astype(np.float32)
 
-solver.run_initial_step()
+if NEW_SIMULATION:
+    solver.run_initial_step()
+    frame_id = 0
+else:
+    frame_id = load_simulation_state(solver) + 1
 
 particle_positions = solver.particle_system.positions.numpy()
 particle_densities = solver.particle_system.densities.numpy()
 print(particle_positions)
 print(max(particle_densities))
 
+# print("Grid positions: ", solver.grid.positions)
 # Initialize renderer
 renderer = OpenGLRenderer(particle_positions, particle_densities)
 renderer.initialize()
 
 # FIRST = True
-frame_id = 0
+
 
 while not glfw.window_should_close(window):
     glfw.poll_events()
@@ -140,17 +184,25 @@ while not glfw.window_should_close(window):
 
     # Update particle positions in the shared array
     particle_positions = solver.particle_system.positions.numpy()
-    # print("Actual particle position: ", particle_positions)
-
-    # Render the updated particle positions
     renderer.update_particle_positions(particle_positions)
     renderer.render()
-
-    if frame_id % 10 == 0:
-        save_rendered_frame(frame_id, window)
+    save_rendered_frame(frame_id, window)
+    save_simulation_state(frame_id, solver)
     frame_id += 1
-
     glfw.swap_buffers(window)
+
+    # if frame_id % 10 == 0:
+    #     particle_positions = solver.particle_system.positions.numpy()
+    #     renderer.update_particle_positions(particle_positions)
+    #     renderer.render()
+    #     save_rendered_frame(frame_id, window)
+
+    # if frame_id % 50 == 0:
+    #     save_simulation_state(frame_id, solver)
+    # frame_id += 1
+
+    # if frame_id % 10 == 0:
+    #     glfw.swap_buffers(window)
 
 glfw.terminate()
 

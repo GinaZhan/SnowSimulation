@@ -19,10 +19,11 @@ def N(x: float) -> float:
     else:
         return 0.0
 
-    if result < WEIGHT_EPSILON:
-        return 0.0
-    else:
-        return result
+    # if result < WEIGHT_EPSILON:
+    #     return 0.0
+    # else:
+    #     return result
+    return result
     
 @wp.func
 def N_prime(x: float) -> float:
@@ -46,9 +47,9 @@ def initialize_positions_kernel(
     tid = wp.tid()  # Thread ID for the current grid node
 
     # Compute 3D grid indices from flat tid
-    z = tid // (grid_size * grid_size)
+    x = tid // (grid_size * grid_size)
     y = (tid % (grid_size * grid_size)) // grid_size
-    x = tid % grid_size
+    z = tid % grid_size
 
     # Set the position of the grid node
     # positions[tid] = wp.vec3(float(x), float(y), float(z)) * grid_space
@@ -66,6 +67,10 @@ def update_velocity_star_kernel(
     tid = wp.tid()
     if mass[tid] > 0.0:
         velocities_star[tid] = velocities[tid] + (forces[tid] / mass[tid] + gravity) * timestep
+
+        # velocities_star[tid] = velocities[tid] + gravity * timestep
+        # print("Gravity")
+        # print(gravity)
 
 @wp.kernel
 def compute_weights_kernel(
@@ -93,9 +98,9 @@ def compute_weights_kernel(
                 node_idx = int(x) * grid_size * grid_size + int(y) * grid_size + int(z)
                 
                 grid_pos = grid_positions[node_idx]
-                dx = (particle_pos[0] - grid_pos[0]*grid_space) / grid_space
-                dy = (particle_pos[1] - grid_pos[1]*grid_space) / grid_space
-                dz = (particle_pos[2] - grid_pos[2]*grid_space) / grid_space
+                dx = (particle_pos[0] - grid_pos[0]*grid_space - 0.5 * grid_space) / grid_space
+                dy = (particle_pos[1] - grid_pos[1]*grid_space - 0.5 * grid_space) / grid_space
+                dz = (particle_pos[2] - grid_pos[2]*grid_space - 0.5 * grid_space) / grid_space
                 weight = N(dx) * N(dy) * N(dz)
                 wp.atomic_add(weights, node_idx, weight)
 
@@ -154,9 +159,9 @@ def transfer_mass_and_velocity_kernel(
                     + int(grid_idx[2])
                 )
                 
-                dx = (particle_pos[0] - grid_positions[node_idx][0]*grid_space) / grid_space
-                dy = (particle_pos[1] - grid_positions[node_idx][1]*grid_space) / grid_space
-                dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space) / grid_space
+                dx = (particle_pos[0] - grid_positions[node_idx][0]*grid_space - 0.5 * grid_space) / grid_space
+                dy = (particle_pos[1] - grid_positions[node_idx][1]*grid_space - 0.5 * grid_space) / grid_space
+                dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space - 0.5 * grid_space) / grid_space
 
                 weight = N(dx) * N(dy) * N(dz)
 
@@ -193,6 +198,8 @@ def setup_particle_density_volume_kernel(
     particle_pos = particle_positions[tid]
     particle_density = float(0.0)  # Explicitly declare as dynamic
 
+    # total_weight = float(0.0)
+    # total_mass = float(0.0)
     for i in range(-2, 3):
         for j in range(-2, 3):
             for k in range(-2, 3):
@@ -213,19 +220,34 @@ def setup_particle_density_volume_kernel(
                     + int(grid_idx[2])
                 )
 
-                dx = (particle_pos[0] - grid_positions[node_idx][0]*grid_space) / grid_space
-                dy = (particle_pos[1] - grid_positions[node_idx][1]*grid_space) / grid_space
-                dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space) / grid_space
+                dx = (particle_pos[0] - grid_positions[node_idx][0]*grid_space - 0.5 * grid_space) / grid_space
+                dy = (particle_pos[1] - grid_positions[node_idx][1]*grid_space - 0.5 * grid_space) / grid_space
+                dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space - 0.5 * grid_space) / grid_space
+
+                # if i==0 and j==0 and k==0:
+                #     print("dx")
+                #     print(dx)
+                #     print("dy")
+                #     print(dy)
+                #     print("dz")
+                #     print(dz)
 
                 weight = N(dx) * N(dy) * N(dz)
-                if weight > weight_epsilon:
-                    particle_density += grid_masses[node_idx] / (grid_space * grid_space * grid_space) * weight
+                # total_weight += weight + 0.01
+                # if weight > weight_epsilon:
+                    # particle_density += grid_masses[node_idx] / (grid_space * grid_space * grid_space) * weight
+                particle_density += grid_masses[node_idx] / (grid_space * grid_space * grid_space) * weight
+                # total_mass += grid_masses[node_idx]
 
+    # print("Density total weight")
+    # print(total_weight)
+    # print("Density total mass")
+    # print(total_mass)
     particle_densities[tid] = particle_density
     if particle_density > 0.0:
         particle_volumes[tid] = particle_masses[tid] / particle_density
     else:
-        particle_volumes[tid] = 0.0  # TODO: Or small positive value to avoid divide-by-zero???
+        particle_volumes[tid] = 1e-8  # TODO: Or small positive value to avoid divide-by-zero???
 
 @wp.kernel
 def compute_grid_forces_kernel(
@@ -263,9 +285,9 @@ def compute_grid_forces_kernel(
                 grid_pos = grid_positions[node_idx]
 
                 # Compute weight gradient
-                dx = (particle_pos[0] - grid_pos[0]*grid_space) / grid_space
-                dy = (particle_pos[1] - grid_pos[1]*grid_space) / grid_space
-                dz = (particle_pos[2] - grid_pos[2]*grid_space) / grid_space
+                dx = (particle_pos[0] - grid_pos[0]*grid_space - 0.5 * grid_space) / grid_space
+                dy = (particle_pos[1] - grid_pos[1]*grid_space - 0.5 * grid_space) / grid_space
+                dz = (particle_pos[2] - grid_pos[2]*grid_space - 0.5 * grid_space) / grid_space
 
                 weight_gradient = wp.vec3(
                     (1.0 / grid_space) * N_prime(dx) * N(dy) * N(dz),

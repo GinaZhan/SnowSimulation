@@ -17,10 +17,12 @@ def N(x: float) -> float:
     else:
         return 0.0
 
-    if result < WEIGHT_EPSILON:
-        return 0.0
-    else:
-        return result
+    # if result < WEIGHT_EPSILON:
+    #     return 0.0
+    # else:
+    #     return result
+
+    return result
     
 @wp.func
 def N_prime(x: float) -> float:
@@ -237,9 +239,9 @@ def update_deformation_gradient_kernel(
                 node_idx = int(grid_idx[0]) * grid_size*grid_size + int(grid_idx[1]) * grid_size + int(grid_idx[2])
 
                 # Compute weight gradient
-                dx = (particle_pos[0] - grid_positions[node_idx][0]*grid_space) / grid_space
-                dy = (particle_pos[1] - grid_positions[node_idx][1]*grid_space) / grid_space
-                dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space) / grid_space
+                dx = (particle_pos[0] - grid_positions[node_idx][0]*grid_space - 0.5 * grid_space) / grid_space
+                dy = (particle_pos[1] - grid_positions[node_idx][1]*grid_space - 0.5 * grid_space) / grid_space
+                dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space - 0.5 * grid_space) / grid_space
 
                 weight_gradient = wp.vec3(
                     (1.0 / grid_space) * N_prime(dx) * N(dy) * N(dz),
@@ -317,6 +319,7 @@ def update_particle_velocity_kernel(
     # print("Grid Center:")
     # print(grid_center)
     
+    # total_weight = float(0.0)
     # Loop over nearby grid nodes
     for i in range(-2, 3):
         for j in range(-2, 3):
@@ -336,11 +339,12 @@ def update_particle_velocity_kernel(
                 node_idx = int(grid_idx[0]) * grid_size*grid_size + int(grid_idx[1]) * grid_size + int(grid_idx[2])
 
                 # Compute weight
-                dx = (particle_pos[0] - grid_positions[node_idx][0]*grid_space) / grid_space
-                dy = (particle_pos[1] - grid_positions[node_idx][1]*grid_space) / grid_space
-                dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space) / grid_space
+                dx = (particle_pos[0] - grid_positions[node_idx][0]*grid_space - 0.5 * grid_space) / grid_space
+                dy = (particle_pos[1] - grid_positions[node_idx][1]*grid_space - 0.5 * grid_space) / grid_space
+                dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space - 0.5 * grid_space) / grid_space
 
                 weight = N(dx) * N(dy) * N(dz)
+                # total_weight += weight
 
                 # print("Node index: dx, dy, dz, weight")
                 # print(node_idx)
@@ -357,13 +361,19 @@ def update_particle_velocity_kernel(
                 velocity_PIC += grid_new_velocities[node_idx] * weight
                 velocity_FLIP += (grid_new_velocities[node_idx] - grid_velocities[node_idx]) * weight
 
+    # print("velocity PIC")
+    # print(velocity_PIC)
+    # print("velocity FLIP")
+    # print(velocity_FLIP)
+    # print("total weight")
+    # print(total_weight)
     # Blend PIC and FLIP velocities
     particle_velocities[tid] = (1.0 - alpha) * velocity_PIC + alpha * velocity_FLIP
 
     # Apply small velocity threshold
-    # for d in range(3):
-    #     if wp.abs(particle_velocities[tid][d]) < 1e-8:
-    #         particle_velocities[tid][d] = 0.0
+    for d in range(3):
+        if wp.abs(particle_velocities[tid][d]) < 1e-8:
+            particle_velocities[tid][d] = 0.0
 
 # @wp.kernel
 # def apply_collision_kernel(
@@ -511,6 +521,7 @@ class ParticleSystem:
                 self.alpha,
                 self.stresses,
                 use_cauchy,
+                # 0,
                 debug_flags,
             ],
         )
