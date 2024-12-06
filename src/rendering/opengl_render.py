@@ -5,12 +5,19 @@ from .camera import Camera
 import os
 
 class OpenGLRenderer:
-    def __init__(self, particle_positions):
+    def __init__(self, particle_positions, particle_densities):
         self.particle_positions = particle_positions
+        self.particle_densities = particle_densities  # Add densities
+        self.max_density = np.max(particle_densities)
+
+        # OpenGL handles
         self.shader_program = None
         self.vao = None
-        self.vbo = glGenBuffers(1)
+        self.vbo = glGenBuffers(1)  # VBO for positions + densities
         self.camera = None
+
+        # print(particle_positions.shape)
+
 
     def initialize(self):
         # Compile shaders
@@ -18,35 +25,45 @@ class OpenGLRenderer:
         fragment_shader = self.load_shader("shaders/fragment_shader.glsl", GL_FRAGMENT_SHADER)
         self.shader_program = compileProgram(vertex_shader, fragment_shader)
 
-        # Set up VAO and VBO for particles
+        # Combine positions and densities
+        particle_data = np.hstack((self.particle_positions, self.particle_densities.reshape(-1, 1)))
+
+        # Set up VAO and VBO
         self.vao = glGenVertexArrays(1)
         glBindVertexArray(self.vao)
 
-        # vbo = glGenBuffers(1)
-
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
-        glBufferData(GL_ARRAY_BUFFER, self.particle_positions.nbytes, self.particle_positions, GL_STATIC_DRAW)
+        glBufferData(GL_ARRAY_BUFFER, particle_data.nbytes, particle_data, GL_STATIC_DRAW)
 
         # Configure vertex attributes
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, None)
+        stride = 4 * 4  # 4 floats per vertex (3 for position + 1 for density)
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(0))  # Position
         glEnableVertexAttribArray(0)
 
+        glVertexAttribPointer(1, 1, GL_FLOAT, GL_FALSE, stride, ctypes.c_void_p(12))  # Density
+        glEnableVertexAttribArray(1)
+
+        # Unbind VAO and VBO
         glBindBuffer(GL_ARRAY_BUFFER, 0)
         glBindVertexArray(0)
 
-        # Enable depth testing for 3D rendering
-        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE)  # Additive blending
 
-        # Set up camera
+        # Enable depth testing
+        glDisable(GL_DEPTH_TEST)
+
+        # Initialize camera
         self.camera = Camera(
-            position=[0.0, 0.0, 50.0],
-            target=[0.0, 0.0, 0.0],
+            position=[3.0, 0.0, 30.0],
+            target=[3.0, 3.0, 3.0],
             up=[0.0, 1.0, 0.0],
             fov=45.0,
             aspect=800 / 600,
             near=0.1,
             far=100.0
         )
+
 
     def load_shader(self, file_path, shader_type):
         # Get the directory of this script
@@ -61,19 +78,22 @@ class OpenGLRenderer:
     
     def update_particle_positions(self, particle_positions):
         self.particle_positions = np.array(particle_positions, dtype=np.float32)
-        
+        particle_data = np.hstack((self.particle_positions, self.particle_densities.reshape(-1, 1)))  # Combine positions and densities
+
         # Check buffer size and reallocate if necessary
         glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
         current_buffer_size = glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE)
-        if self.particle_positions.nbytes > current_buffer_size:
+        if particle_data.nbytes > current_buffer_size:
             print("Reallocating buffer due to size mismatch")
-            glBufferData(GL_ARRAY_BUFFER, self.particle_positions.nbytes, None, GL_DYNAMIC_DRAW)
-        
+            glBufferData(GL_ARRAY_BUFFER, particle_data.nbytes, None, GL_DYNAMIC_DRAW)
+
         # Update buffer data
-        glBufferSubData(GL_ARRAY_BUFFER, 0, self.particle_positions.nbytes, self.particle_positions.ravel())
+        glBufferSubData(GL_ARRAY_BUFFER, 0, particle_data.nbytes, particle_data.ravel())
         glBindBuffer(GL_ARRAY_BUFFER, 0)
 
+
     def render(self):
+        glClearColor(0.0, 0.3, 0.6, 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         # Use the shader program
@@ -90,8 +110,11 @@ class OpenGLRenderer:
         glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "view"), 1, GL_TRUE, view)
         glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "projection"), 1, GL_TRUE, projection)
 
+        print("Max Density: ", self.max_density)
+        glUniform1f(glGetUniformLocation(self.shader_program, "maxdensity"), self.max_density)
+
         # Set point size
-        glPointSize(5)  # Adjust the size of the particles as desired
+        # glPointSize(5)  # Adjust the size of the particles as desired
 
         # Draw particles
         glBindVertexArray(self.vao)

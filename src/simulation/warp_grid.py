@@ -304,7 +304,6 @@ class Grid:
         # self.nodes = [[[GridNode((i, j, k)) for k in range(size)] for j in range(size)] for i in range(size)]
         self.nodes = []
         self.size = size
-        self.size = size
         self.grid_space = grid_space
 
         # Initialize grid properties as arrays

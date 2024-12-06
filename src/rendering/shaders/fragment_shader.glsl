@@ -1,22 +1,16 @@
 #version 330 core
 
-in vec3 fragPosition;
-out vec4 fragColor;
-
-// void main() {
-//     fragColor = vec4(1.0, 1.0, 1.0, 1.0); // White color for snow
-// }
-
-// void main() {
-//     if (fragPosition.y < 5.0) {
-//         fragColor = vec4(0.0, 0.0, 1.0, 1.0); // Blue for y < 5
-//     } else if (fragPosition.y < 10.0) {
-//         fragColor = vec4(0.0, 1.0, 0.0, 1.0); // Green for 5 <= y < 10
-//     } else {
-//         fragColor = vec4(1.0, 1.0, 1.0, 1.0); // White for y >= 10
-//     }
-// }
+in float fragDensity;  // Density from the vertex shader
+out vec4 FragColor;    // Final fragment color
 
 void main() {
-    fragColor = vec4(1.0, 1.0, 1.0, 0.5);
+    // Map density to brightness (adjust scale as needed)
+    float brightness = fragDensity;
+    // float finalBrightness = min(brightness, 1.0);
+    if (brightness < 1e-3) {
+        brightness = 0.1;
+    }
+    FragColor = vec4(brightness, brightness, brightness, 1.0);
+
+    // FragColor = vec4(1.0, 1.0, 1.0, brightness);  // Use brightness for grayscale color
 }

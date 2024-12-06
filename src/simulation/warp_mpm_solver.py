@@ -28,45 +28,45 @@ class MPMSolver:
         self.grid.clear()
         # Step 1
         self.grid.transfer_mass_and_velocity(self.particle_system)
-        print("Step 1")
+        # print("Step 1")
 
     def compute_forces(self):
         # Compute stress-based forces using the constitutive relations
         # Step 3
         self.grid.compute_grid_forces(self.particle_system)
-        print("Step 3")
+        # print("Step 3")
 
 
     def update_grid_velocities(self):
         # Update the velocity of grid nodes based on forces and time step
         # Step 4
         self.grid.update_grid_velocity_star()
-        print("Step 4")
+        # print("Step 4")
         # Step 5
         self.grid.apply_collisions(self.collision_objects)
-        print("Step 5")
+        # print("Step 5")
         # Step 6
         self.grid.explicit_update_velocity()
-        print("Step 6")
+        # print("Step 6")
 
     def update_particle_velocities_and_positions(self):
         # Update particle velocities and positions based on grid data
         # Step 7
         self.particle_system.update_deformation_gradients(self.grid)
-        print("Step 7")
+        # print("Step 7")
         # Step 8
-        print("Before Updating Velocities: ", self.particle_system.velocities)
+        # print("Before Updating Velocities: ", self.particle_system.velocities)
         self.particle_system.update_velocity(self.grid)
         print("After Updating Velocities: ", self.particle_system.velocities)
-        print("Step 8")
+        # print("Step 8")
         # Step 9
         self.particle_system.apply_collisions(self.collision_objects)
         # print("Before Updating Position: ", self.particle_system.positions)
-        print("Step 9")
+        # print("Step 9")
         # Step 10
         self.particle_system.update_position()
         # print("After Updating Position: ", self.particle_system.positions)
-        print("Step 10")
+        # print("Step 10")
 
     def run_time_step(self):
         # Full time step of MPM: Rasterize, Compute Forces, Update Grid, Update Particles

@@ -361,9 +361,9 @@ def update_particle_velocity_kernel(
     particle_velocities[tid] = (1.0 - alpha) * velocity_PIC + alpha * velocity_FLIP
 
     # Apply small velocity threshold
-    for d in range(3):
-        if wp.abs(particle_velocities[tid][d]) < 1e-6:
-            particle_velocities[tid][d] = 0.0
+    # for d in range(3):
+    #     if wp.abs(particle_velocities[tid][d]) < 1e-8:
+    #         particle_velocities[tid][d] = 0.0
 
 # @wp.kernel
 # def apply_collision_kernel(
