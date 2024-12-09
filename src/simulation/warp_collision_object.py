@@ -18,6 +18,7 @@ def collision_response(
     if vn >= 0.0:
         return velocity  # No collision
 
+    # print(velocity)
     # Compute tangential velocity
     vt = v_rel - normal * vn
     if wp.length(vt) <= (-1.0) * friction_coefficient * vn:
@@ -92,7 +93,7 @@ class CollisionObject:
 
         return grad_phi / grad_phi_norm
     
-    def precompute_for_kernel(self, input_positions):
+    def precompute_for_kernel(self, input_positions, grid_space=0):
         """
         Precompute collision data for a given set of positions.
         """
@@ -104,6 +105,8 @@ class CollisionObject:
         velocities_np = np.zeros((num_particles, 3), dtype=np.float32)
 
         for i, pos in enumerate(input_positions):
+            # if grid_space:
+            #     pos = pos * grid_space + 0.5 * grid_space
             level_set_values_np[i] = self.level_set(pos)
             normals_np[i] = self.compute_normal(pos)
             velocities_np[i] = self.velocity_function(pos)

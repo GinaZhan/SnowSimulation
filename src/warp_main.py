@@ -16,12 +16,13 @@ from PIL import Image
 import os
 import OpenGL.GL as gl
 import time
-import json
 import pickle
 
+# if True, start a new simulation; if False, reload past simulation states and continue
 NEW_SIMULATION = True
 
-frames_dir = "simulation_results/one_cube0.1_1000_cauchy"
+# directory that stores the frames
+frames_dir = "simulation_results/snowball_0.001_8000_wall"
 os.makedirs(frames_dir, exist_ok=True)
 
 def save_rendered_frame(frame_id, window):
@@ -48,8 +49,8 @@ def save_rendered_frame(frame_id, window):
         except Exception as e:
             print(f"Attempt {attempt + 1} failed: {e}")
             time.sleep(3)
-    return
-    # raise RuntimeError(f"Failed to save frame{frame_id:04d} after 10 attempts.")
+    # return
+    raise RuntimeError(f"Failed to save frame{frame_id:04d} after 10 attempts.")
 
 def save_simulation_state(frame_id, solver, file_path="simulation_state.pkl"):
     state = {
@@ -88,28 +89,50 @@ def load_simulation_state(solver, file_path="simulation_state.pkl"):
 
 
 def setup_simulation():
-    num_particles = 1000    # There should be 4-8 particles in one GridNode
+    num_particles = 8000    # There should be 4-8 particles in one GridNode
 
     # Initialize particle system and grid
     # particle_system = ParticleSystem(num_particles)
     grid = Grid(size=64, grid_space=GRID_SPACE)
     # grid = Grid(size=64)
 
-    radius = 0.5
+    radius = 0.3
     # positions = wp.zeros((num_particles, 3), dtype=wp.vec3, device="cuda")
-    velocities = wp.zeros(num_particles, dtype=wp.vec3, device="cuda")
+    velocities = wp.vec3(10.0, 0.0, 0.0)
     pos_list = []
     # vel_list = []
 
+    # cube_num_particles = int(num_particles/3)
     # Initialize particle positions and velocities
     for i in range(num_particles):
         pos = np.random.uniform(-radius, radius, 3)
-        # while np.linalg.norm(pos) > radius:
-        #     pos = np.random.uniform(-radius, radius, 3)
+        while np.linalg.norm(pos) > radius:
+            pos = np.random.uniform(-radius, radius, 3)
         pos[0] += 3
-        pos[1] += 5
+        pos[1] += 3
+        # pos[1] += 1.0
         pos[2] += 3
         pos_list.append(pos)
+
+    # for i in range(cube_num_particles):
+    #     pos = np.random.uniform(-radius, radius, 3)
+    #     # while np.linalg.norm(pos) > radius:
+    #     #     pos = np.random.uniform(-radius, radius, 3)
+    #     pos[0] += 2.7
+    #     pos[1] += 3
+    #     # pos[1] += 0.8
+    #     pos[2] += 3
+    #     pos_list.append(pos)
+
+    # for i in range(cube_num_particles):
+    #     pos = np.random.uniform(-radius, radius, 3)
+    #     # while np.linalg.norm(pos) > radius:
+    #     #     pos = np.random.uniform(-radius, radius, 3)
+    #     pos[0] += 3
+    #     pos[1] += 5
+    #     # pos[1] += 0.8
+    #     pos[2] += 3
+    #     pos_list.append(pos)
 
         # phi = np.random.uniform(0, 2 * np.pi)
         # costheta = np.random.uniform(-1, 1)
@@ -127,7 +150,8 @@ def setup_simulation():
     positions = wp.array([wp.vec3(*p) for p in pos_list], dtype=wp.vec3, device="cuda")
     
     # Initialize particle system and grid
-    particle_system = ParticleSystem(num_particles, positions)
+    particle_system = ParticleSystem(num_particles, positions, velocities)
+    # particle_system = ParticleSystem(num_particles, positions)
 
     # Initialize the solver
     solver = MPMSolver(particle_system, grid)
@@ -187,7 +211,8 @@ while not glfw.window_should_close(window):
     renderer.update_particle_positions(particle_positions)
     renderer.render()
     save_rendered_frame(frame_id, window)
-    save_simulation_state(frame_id, solver)
+    if frame_id % 20 == 0:
+        save_simulation_state(frame_id, solver)
     frame_id += 1
     glfw.swap_buffers(window)
 
@@ -197,7 +222,7 @@ while not glfw.window_should_close(window):
     #     renderer.render()
     #     save_rendered_frame(frame_id, window)
 
-    # if frame_id % 50 == 0:
+    # if frame_id % 20 == 0:
     #     save_simulation_state(frame_id, solver)
     # frame_id += 1
 

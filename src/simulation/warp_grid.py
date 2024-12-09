@@ -72,37 +72,37 @@ def update_velocity_star_kernel(
         # print("Gravity")
         # print(gravity)
 
-@wp.kernel
-def compute_weights_kernel(
-    particle_positions: wp.array(dtype=wp.vec3),
-    grid_positions: wp.array(dtype=wp.vec3),
-    weights: wp.array(dtype=float),
-    grid_size: int,
-    grid_space: float):
+# @wp.kernel
+# def compute_weights_kernel(
+#     particle_positions: wp.array(dtype=wp.vec3),
+#     grid_positions: wp.array(dtype=wp.vec3),
+#     weights: wp.array(dtype=float),
+#     grid_size: int,
+#     grid_space: float):
     
-    tid = wp.tid()
-    particle_pos = particle_positions[tid]
+#     tid = wp.tid()
+#     particle_pos = particle_positions[tid]
 
-    for i in range(-2, 3):
-        for j in range(-2, 3):
-            for k in range(-2, 3):
-                x = wp.floor(particle_pos[0] / grid_space) + float(i)
-                y = wp.floor(particle_pos[1] / grid_space) + float(j)
-                z = wp.floor(particle_pos[2] / grid_space) + float(k)
+#     for i in range(-2, 3):
+#         for j in range(-2, 3):
+#             for k in range(-2, 3):
+#                 x = wp.floor(particle_pos[0] / grid_space) + float(i)
+#                 y = wp.floor(particle_pos[1] / grid_space) + float(j)
+#                 z = wp.floor(particle_pos[2] / grid_space) + float(k)
 
-                # Ensure each coordinate is within valid bounds
-                if x < 0 or x >= grid_size or y < 0 or y >= grid_size or z < 0 or z >= grid_size:
-                    continue
+#                 # Ensure each coordinate is within valid bounds
+#                 if x < 0 or x >= grid_size or y < 0 or y >= grid_size or z < 0 or z >= grid_size:
+#                     continue
 
-                # Compute flat index from valid 3D indices
-                node_idx = int(x) * grid_size * grid_size + int(y) * grid_size + int(z)
+#                 # Compute flat index from valid 3D indices
+#                 node_idx = int(x) * grid_size * grid_size + int(y) * grid_size + int(z)
                 
-                grid_pos = grid_positions[node_idx]
-                dx = (particle_pos[0] - grid_pos[0]*grid_space - 0.5 * grid_space) / grid_space
-                dy = (particle_pos[1] - grid_pos[1]*grid_space - 0.5 * grid_space) / grid_space
-                dz = (particle_pos[2] - grid_pos[2]*grid_space - 0.5 * grid_space) / grid_space
-                weight = N(dx) * N(dy) * N(dz)
-                wp.atomic_add(weights, node_idx, weight)
+#                 grid_pos = grid_positions[node_idx]
+#                 dx = (particle_pos[0] - grid_pos[0]*grid_space - 0.5 * grid_space) / grid_space
+#                 dy = (particle_pos[1] - grid_pos[1]*grid_space - 0.5 * grid_space) / grid_space
+#                 dz = (particle_pos[2] - grid_pos[2]*grid_space - 0.5 * grid_space) / grid_space
+#                 weight = N(dx) * N(dy) * N(dz)
+#                 wp.atomic_add(weights, node_idx, weight)
 
 @wp.kernel
 def clear_kernel(
@@ -178,6 +178,8 @@ def normalize_grid_velocity_kernel(
     # Only normalize if mass is non-zero
     if grid_mass[tid] > 0.0:
         grid_velocities[tid] = grid_velocities[tid] / grid_mass[tid]
+        # print("Grid transfer velocities:")
+        # print(grid_velocities[tid])
     else:
         grid_velocities[tid] = wp.vec3(0.0, 0.0, 0.0)
 
@@ -314,10 +316,11 @@ def update_predicted_positions_kernel(
     positions: wp.array(dtype=wp.vec3),
     velocities: wp.array(dtype=wp.vec3),
     timestep: float,
-    predicted_positions: wp.array(dtype=wp.vec3)):
+    predicted_positions: wp.array(dtype=wp.vec3),
+    grid_space: float):
 
     tid = wp.tid()  # Thread ID for the current particle
-    predicted_positions[tid] = positions[tid] + velocities[tid] * timestep
+    predicted_positions[tid] = positions[tid] * grid_space + velocities[tid] * timestep
 
 class Grid:
     def __init__(self, size, grid_space=1.0):
@@ -380,7 +383,6 @@ class Grid:
             inputs=[self.velocities, self.mass],
         )
 
-
     def setup_particle_density_volume(self, particle_system: ParticleSystem):
         # Step 2 - Compute particle volumes and densities - first timestamp only
         # Here we don't reset node and particle density because this function is only called once at first timestamp
@@ -402,23 +404,8 @@ class Grid:
     
     def compute_grid_forces(self, particle_system: ParticleSystem):
         # Step 3
-        
-        # nan_count = count_nan_values_in_array(particle_system.initial_volumes)
-        # print(f"Number of NaN values in particle_system.initial_volumes: {nan_count}")
-        
-        # nan_count = count_nan_values_in_array(particle_system.stresses)
-        # print(f"Number of NaN values in particle_system.stresses: {nan_count}")
-        # nan_count = count_nan_values_in_array(self.positions)
-        # print(f"Number of NaN values in grid_positions: {nan_count}")
-        # nan_count = count_nan_values_in_array(self.forces)
-        # print(f"Number of NaN values in grid_forces: {nan_count}")
 
         particle_system.compute_stress_tensors()
-
-        # nan_count = count_nan_values_in_array(particle_system.positions)
-        # print(f"Number of NaN values in particle_system.positions: {nan_count}")
-        # print(particle_system.stresses)     
-        # print(particle_system.initial_volumes)
 
         wp.launch(
             kernel=compute_grid_forces_kernel,
@@ -433,21 +420,12 @@ class Grid:
                 self.grid_space,
             ],
         )
-        nan_count = count_nan_values_in_array(self.forces)
-        print(f"Number of NaN values in grid_forces: {nan_count}")
+        # nan_count = count_nan_values_in_array(self.forces)
+        # print(f"Number of NaN values in grid_forces: {nan_count}")
 
     def update_grid_velocity_star(self):
         # Step 4 - Update grid velocity
-        # nan_count = count_nan_values_in_array(self.velocities)
-        # print(f"Number of NaN values in grid_velocities: {nan_count}")
-        # nan_count = count_nan_values_in_array(self.velocities_star)
-        # print(f"Number of NaN values in grid_velocities_star: {nan_count}")
-        # nan_count = count_nan_values_in_array(self.forces)
-        # print(f"Number of NaN values in grid_forces: {nan_count}")
-        # # nan_count = count_nan_values_in_array(self.mass)
-        # # print(f"Number of NaN values in grid_mass: {nan_count}")
-        # print("Gravity: ", GRAVITY)
-        # print("Timestep: ", TIMESTEP)
+
         wp.launch(
             kernel=update_velocity_star_kernel,
             dim=self.size**3,
@@ -460,28 +438,21 @@ class Grid:
                 TIMESTEP
             ]
         )
-        # nan_count = count_nan_values_in_array(self.velocities_star)
-        # print(f"Number of NaN values in grid_velocities_star: {nan_count}")
+
+        # print("After Gravity")
+        # grid_velocities = self.velocities_star.numpy()
+
+        # # # Find the indices of nonzero vectors
+        # nonzero_indices = np.where(np.linalg.norm(grid_velocities, axis=1) > 10)[0]  # Use a small threshold to avoid floating-point noise
+        # nonzero_vectors = grid_velocities[nonzero_indices]
+        # print("After gravity grid has ", len(nonzero_vectors))
 
     def apply_collisions(self, collision_objects):
         # Step 5
         """Apply collisions to each grid node's velocity based on collision objects."""
-        # nan_count = count_nan_values_in_array(self.velocities_star)
-        # print(f"Number of NaN values in grid_velocities_star: {nan_count}")
-        # for node in self.nodes:
-        #     for obj in collision_objects:
-        #         if obj.is_colliding(node.position):
-        #             # print("Colliding when ", node.position)
-        #             node.velocity_star = obj.collision_response(node.velocity_star, node.position + TIMESTEP * node.velocity_star)
 
         num_grids = self.size**3
         num_objects = len(collision_objects)
-
-        # # Initialize 2D Warp arrays for collision data
-        # level_set_values = wp.zeros((num_grids, num_objects), dtype=float, device="cuda")
-        # normals = wp.zeros((num_grids, num_objects), dtype=wp.vec3, device="cuda")
-        # velocities = wp.zeros((num_grids, num_objects), dtype=wp.vec3, device="cuda")
-        # friction_coefficients = wp.zeros(num_objects, dtype=float, device="cuda")
 
         level_set_values_np = np.zeros((num_grids, num_objects), dtype=np.float32)
         normals_np = np.zeros((num_grids, num_objects, 3), dtype=np.float32)
@@ -493,18 +464,8 @@ class Grid:
         wp.launch(
             kernel=update_predicted_positions_kernel,  # Custom kernel to compute predicted positions
             dim=num_grids,
-            inputs=[self.positions, self.velocities_star, TIMESTEP, predicted_positions],
+            inputs=[self.positions, self.velocities_star, TIMESTEP, predicted_positions, self.grid_space],  # predicted positions are real positions but not indexes
         )
-
-        # # Precompute collision data for each object
-        # for i, obj in enumerate(collision_objects):
-        #     lv, n, v = obj.precompute_for_kernel(predicted_positions.numpy()) # .numpy() is needed here because Warp arrays do not support direct indexing
-        #     level_set_values[:, i] = lv
-        #     normals[:, i] = n
-        #     velocities[:, i] = v
-        #     friction_coefficients[i] = obj.friction_coefficient
-
-        
 
         for i, obj in enumerate(collision_objects):
             lv, n, v = obj.precompute_for_kernel(predicted_positions.numpy())
@@ -513,41 +474,55 @@ class Grid:
             velocities_np[:, i, :] = v.numpy()
             friction_coefficients_np[i] = obj.friction_coefficient
 
+        # print("min level set values: ", level_set_values_np.min())
+
         # Flatten the arrays for Warp
-        level_set_values = wp.array(level_set_values_np.reshape(num_grids, num_objects), dtype=float, device="cuda")
-        normals = wp.array(normals_np.reshape(num_grids, num_objects, 3), dtype=wp.vec3, device="cuda")
-        velocities = wp.array(velocities_np.reshape(num_grids, num_objects, 3), dtype=wp.vec3, device="cuda")
+        level_set_values = wp.array2d(level_set_values_np.reshape(num_grids, num_objects), dtype=float, device="cuda")
+        # normals = wp.array(normals_np.reshape(num_grids, num_objects, 3), dtype=wp.vec3, device="cuda")
+        # velocities = wp.array(velocities_np.reshape(num_grids, num_objects, 3), dtype=wp.vec3, device="cuda")
+        normals = wp.array2d(normals_np, dtype=wp.vec3, device="cuda")  # Shape: [num_grids, num_objects]
+        velocities = wp.array2d(velocities_np, dtype=wp.vec3, device="cuda")  # Shape: [num_grids, num_objects]
         friction_coefficients = wp.array(friction_coefficients_np, dtype=float, device="cuda")
+
+        # grid_velocities = self.velocities_star.numpy()
+
+        # # # Find the indices of nonzero vectors
+        # nonzero_indices = np.where(np.linalg.norm(grid_velocities, axis=1) > 10)[0]  # Use a small threshold to avoid floating-point noise
+        # nonzero_vectors = grid_velocities[nonzero_indices]
+        # print("Before collision grid has ", len(nonzero_vectors))
 
         # Launch the kernel
         wp.launch(
             kernel=apply_collision_kernel,
             dim=num_grids,
             inputs=[
-                self.velocities,
+                self.velocities_star,
                 level_set_values,
                 normals,
                 velocities,
-                friction_coefficients,
+                friction_coefficients
             ],
         )
+
+        # print("Grid velocity after collision")
+        # print(self.velocities_star)
+        # grid_velocities = self.velocities_star.numpy()
+
+        # # # Find the indices of nonzero vectors
+        # nonzero_indices = np.where(np.linalg.norm(grid_velocities, axis=1) > 10)[0]  # Use a small threshold to avoid floating-point noise
+        # nonzero_vectors = grid_velocities[nonzero_indices]
+        # print("After collision grid has ", len(nonzero_vectors))
 
         # nan_count = count_nan_values_in_array(self.velocities_star)
         # print(f"Number of NaN values in grid_velocities_star: {nan_count}")
 
     def explicit_update_velocity(self):
         # Step 6
-        # nan_count = count_nan_values_in_array(self.new_velocities)
-        # print(f"Number of NaN values in grid_new_velocities: {nan_count}")
-        # nan_count = count_nan_values_in_array(self.velocities_star)
-        # print(f"Number of NaN values in grid_velocities_star: {nan_count}")
         wp.launch(
             kernel=explicit_update_velocity_kernel,
             dim=self.size**3,
             inputs=[self.new_velocities, self.velocities_star],
         )
-        # nan_count = count_nan_values_in_array(self.new_velocities)
-        # print(f"Number of NaN values in grid_new_velocities: {nan_count}")
 
 def count_nan_values_in_array(array: wp.array):
     num_elements = array.shape[0]

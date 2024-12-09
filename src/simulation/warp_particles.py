@@ -361,6 +361,12 @@ def update_particle_velocity_kernel(
                 velocity_PIC += grid_new_velocities[node_idx] * weight
                 velocity_FLIP += (grid_new_velocities[node_idx] - grid_velocities[node_idx]) * weight
 
+                # if i==0 and j==0 and k==0:
+                #     print("Grid new velocities")
+                #     print(grid_new_velocities[node_idx])
+                #     print("Grid velocities")
+                #     print(grid_velocities[node_idx])
+
     # print("velocity PIC")
     # print(velocity_PIC)
     # print("velocity FLIP")
@@ -441,13 +447,23 @@ def update_predicted_positions_kernel(
     predicted_positions[tid] = positions[tid] + velocities[tid] * timestep
 
 class ParticleSystem:
-    def __init__(self, num_particles, positions):   # TODO: velocities are initialized to 0
+    def __init__(self, num_particles, positions, velocities=None):   # TODO: velocities are initialized to 0
         self.num_particles = num_particles
 
         # Particle properties
         self.positions = positions
-        self.velocities = wp.zeros(num_particles, dtype=wp.vec3, device="cuda")
+
+        if velocities is None:
+            # Initialize velocities to zero if not provided
+            self.velocities = wp.zeros(num_particles, dtype=wp.vec3, device="cuda")
+        elif isinstance(velocities, wp.vec3):
+            # Use the provided wp.vec3 to initialize all velocities
+            self.velocities = wp.array([velocities] * num_particles, dtype=wp.vec3, device="cuda")
+        else:
+            raise ValueError("Velocities must be a wp.vec3 or None.")
+        
         self.masses = wp.ones(num_particles, dtype=float, device="cuda")
+        # self.masses = wp.full(num_particles, 0.4, dtype=float, device="cuda")
         self.initial_volumes = wp.ones(num_particles, dtype=float, device="cuda")
 
         # Deformation gradients
@@ -481,31 +497,6 @@ class ParticleSystem:
         Compute stress tensors for all particles.
         """
         # Step 3
-
-        # print("Start!")
-        # print(self.F_E)
-        # print(self.F_P)
-        # print(self.mu_0)
-        # print(self.lambda_0)
-        # print(self.alpha)
-        # print(self.stresses)
-        # print("End!")
-
-        # wp.launch(
-        #     kernel=compute_stress_tensor_kernel,
-        #     dim=self.num_particles,
-        #     inputs=[
-        #         self.F_E,
-        #         self.F_P,
-        #         self.mu_0,
-        #         self.lambda_0,
-        #         self.alpha,
-        #         self.stresses,
-        #         use_cauchy,
-        #     ],
-        # )
-
-        # print(self.stresses)
 
         debug_flags = wp.zeros(self.num_particles, dtype=int, device="cuda")
 
@@ -566,6 +557,18 @@ class ParticleSystem:
         # print("Grid Size:", grid.size)
         # print("Grid Spacing:", grid.grid_space)
         # print("Alpha:", alpha)
+
+        # velocities = grid.velocities.numpy()
+
+        # # Find the indices of nonzero vectors
+        # nonzero_indices = np.where(np.linalg.norm(velocities, axis=1) > 1e-8)[0]  # Use a small threshold to avoid floating-point noise
+        # nonzero_vectors = velocities[nonzero_indices]
+
+        # Print the indices and corresponding non-zero vectors
+        # for idx, vec in zip(nonzero_indices, nonzero_vectors):
+        #     print(f"Index: {idx}, Vector: {vec}")
+
+        
         wp.launch(
             kernel=update_particle_velocity_kernel,
             dim=self.num_particles,
@@ -580,6 +583,7 @@ class ParticleSystem:
                 alpha,
             ]
         )
+        
 
     def apply_collisions(self, collision_objects):
         """
@@ -628,6 +632,9 @@ class ParticleSystem:
         velocities = wp.array(velocities_np.reshape(num_particles, num_objects, 3), dtype=wp.vec3, device="cuda")
         friction_coefficients = wp.array(friction_coefficients_np, dtype=float, device="cuda")
 
+        # print("Particle velocity before collision")
+        # print(self.velocities)
+
         # Launch the kernel
         wp.launch(
             kernel=apply_collision_kernel,
@@ -640,6 +647,8 @@ class ParticleSystem:
                 friction_coefficients,
             ],
         )
+        # print("Particle velocity before collision")
+        # print(self.velocities)
 
     def update_position(self):
         # Step 10 - Update particle positions
