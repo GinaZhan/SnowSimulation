@@ -104,9 +104,13 @@ def compute_stress_tensor_kernel(
 
     # Compute stress tensor
     if use_cauchy:
-        dpsi_dF_E = 2.0 * mu * (F_E_local - R_E) + lambda_ * (J_E - 1.0) * J_E * wp.transpose(wp.inverse(F_E_local))
+        # dpsi_dF_E = 2.0 * mu * (F_E_local - R_E) + lambda_ * (J_E - 1.0) * J_E * wp.transpose(wp.inverse(F_E_local))
+        # J = J_E * J_P
+        # stress[tid] = (1.0 / J) * dpsi_dF_E @ wp.transpose(F_E_local)
+        
+        temp = 2.0 * mu * (F_E_local - R_E) @ wp.transpose(F_E_local) + lambda_ * (J_E - 1.0) * J_E * wp.identity(3, dtype=wp.float32)
         J = J_E * J_P
-        stress[tid] = (1.0 / J) * dpsi_dF_E @ wp.transpose(F_E_local)
+        stress[tid] = (1.0 / J) * temp
     else:
         stress[tid] = (
             2.0 * mu * (F_E_local - R_E) @ wp.transpose(F_E_local)
@@ -162,24 +166,22 @@ def compute_stress_tensor_debug_kernel(
 
     # Compute stress tensor
     if use_cauchy:
-        dpsi_dF_E = 2.0 * mu * (F_E_local - R_E)
-        if wp.isnan(dpsi_dF_E[0, 0]):  # Simplified NaN check for dpsi_dF_E
-            debug_flags[tid] = 4  # Flag Cauchy stress computation issue
-            return
+        temp = 2.0 * mu * (F_E_local - R_E) @ wp.transpose(F_E_local) + lambda_ * (J_E - 1.0) * J_E * wp.identity(3, dtype=wp.float32)
+        J = J_E * J_P
+        
         if J_E <= 0.0 or wp.isnan(J_E):
             debug_flags[tid] = 8  # Invalid determinant for F_E
             return
-
         if J_P <= 0.0 or wp.isnan(J_P):
             debug_flags[tid] = 9  # Invalid determinant for F_P
             return
-        J = J_E * J_P
         if J <= 0.0:
             debug_flags[tid] = 5  # Flag invalid determinant
             return
         if wp.isnan(J):
             debug_flags[tid] = 7
-        stress[tid] = (1.0 / J) * dpsi_dF_E @ wp.transpose(F_E_local)
+
+        stress[tid] = (1.0 / J) * temp
     else:
         dpsi_dF_E = (
             2.0 * mu * (F_E_local - R_E) @ wp.transpose(F_E_local)
@@ -197,6 +199,8 @@ def update_deformation_gradient_kernel(
     particle_F_E: wp.array(dtype=wp.mat33),
     particle_F_P: wp.array(dtype=wp.mat33),
     particle_deformation_gradient: wp.array(dtype=wp.mat33),
+    particle_polar_r: wp.array(dtype=wp.mat33),
+    particle_polar_s: wp.array(dtype=wp.mat33),
     grid_positions: wp.array(dtype=wp.vec3),
     grid_velocities: wp.array(dtype=wp.vec3),
     grid_size: int,
@@ -278,6 +282,8 @@ def update_deformation_gradient_kernel(
 
     # Update F_E and F_P
     if plastic_deformation:
+        particle_polar_r[tid] = U @ wp.transpose(V)  # Rotation matrix
+        particle_polar_s[tid] = V @ wp.diag(sigma_clamped) @ wp.transpose(V)  # Stretch matrix
         particle_F_E[tid] = U @ wp.diag(sigma_clamped) @ wp.transpose(V)
         particle_F_P[tid] = wp.transpose(V) @ wp.diag(1.0 / sigma_clamped) @ wp.transpose(U) @ F_np1
     else:
@@ -484,6 +490,9 @@ class ParticleSystem:
         self.lambda_0 = LAMBDA
         self.alpha = ALPHA
 
+        self.polar_r = wp.array([identity_matrix] * num_particles, dtype=wp.mat33, device="cuda")
+        self.polar_s = wp.array([identity_matrix] * num_particles, dtype=wp.mat33, device="cuda")
+
     def initialize_particle(self, index, position, velocity, mass):
         self.positions[index] = wp.vec3(*position)
         self.velocities[index] = wp.vec3(*velocity)
@@ -535,6 +544,8 @@ class ParticleSystem:
                 self.F_E,
                 self.F_P,
                 self.deformation_gradient,
+                self.polar_r,
+                self.polar_s,
                 grid.positions,
                 grid.velocities,
                 grid.size,

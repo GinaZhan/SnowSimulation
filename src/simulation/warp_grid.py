@@ -36,12 +36,109 @@ def N_prime(x: float) -> float:
         return result
     else:
         return 0.0
+    
+@wp.func
+def cofactor_3x3(m: wp.mat33) -> wp.mat33:
+    """
+    Compute the cofactor matrix of a 3x3 matrix.
+    """
+    return wp.mat33(
+        # Row 0
+        m[1, 1] * m[2, 2] - m[1, 2] * m[2, 1],
+        -(m[1, 0] * m[2, 2] - m[1, 2] * m[2, 0]),
+        m[1, 0] * m[2, 1] - m[1, 1] * m[2, 0],
+
+        # Row 1
+        -(m[0, 1] * m[2, 2] - m[0, 2] * m[2, 1]),
+        m[0, 0] * m[2, 2] - m[0, 2] * m[2, 0],
+        -(m[0, 0] * m[2, 1] - m[0, 1] * m[2, 0]),
+
+        # Row 2
+        m[0, 1] * m[1, 2] - m[0, 2] * m[1, 1],
+        -(m[0, 0] * m[1, 2] - m[0, 2] * m[1, 0]),
+        m[0, 0] * m[1, 1] - m[0, 1] * m[1, 0],
+    )
+
+@wp.func
+def frobenius_inner_product(m1: wp.mat33, m2: wp.mat33) -> float:
+    """
+    Compute the Frobenius inner product of two 3x3 matrices.
+    """
+    result = 0.0
+    for i in range(3):
+        for j in range(3):
+            result += m1[i, j] * m2[i, j]
+    return result
+
+@wp.func
+def delta_force_3d(u: wp.vec3, weight_gradient: wp.vec3, F_E: wp.mat33, polar_r: wp.mat33, polar_s: wp.mat33, volume: float, mu: float, lambda_: float, matrix_epsilon: float, timestep: float) -> wp.vec3:
+    """
+    Compute the change in force deltaForce in 3D.
+
+    Args:
+        u: The velocity vector, the residual in this case.
+        weight_gradient: The gradient of the weight function.
+        F_E: Elastic deformation gradient.
+        polar_r: Rotation matrix from polar decomposition.
+        polar_s: Stretch matrix from polar decomposition.
+        volume: Particle volume.
+        ...
+
+    Returns:
+        deltaForce as a 3D vector.
+    """
+    # Compute delta(Fe) = timestep * outer_product(u, weight_grad) * def_elastic
+    del_elastic = TIMESTEP * wp.outer(u, weight_gradient) @ F_E
+
+    # Check if delta(Fe) is negligible
+    if wp.length(del_elastic[0]) < matrix_epsilon and wp.length(del_elastic[1]) < matrix_epsilon and wp.length(del_elastic[2]) < matrix_epsilon:
+        return wp.vec3(0.0, 0.0, 0.0)
+
+    # Compute R^T * delta(Fe) - delta(Fe)^T * R (skew-symmetric part)
+    skew = wp.transpose(polar_r) @ del_elastic - wp.transpose(del_elastic) @ polar_r
+
+    # Extract components of the skew-symmetric matrix
+    y = wp.vec3(skew[2, 1] - skew[1, 2], skew[0, 2] - skew[2, 0], skew[1, 0] - skew[0, 1])
+
+    # Solve for x in MS + SM = R^T * delta(Fe) - delta(Fe)^T * R
+    x = wp.vec3(
+        y[0] / (polar_s[1, 1] + polar_s[2, 2]),
+        y[1] / (polar_s[0, 0] + polar_s[2, 2]),
+        y[2] / (polar_s[0, 0] + polar_s[1, 1]),
+    )
+
+    # Compute delta(R) = R * skew(x)
+    del_rotate = polar_r @ wp.mat33(
+        0.0, -x[2], x[1],
+        x[2], 0.0, -x[0],
+        -x[1], x[0], 0.0
+    )
+
+    # Compute cofactor matrix of Fe (JF^-T)
+    cofactor = cofactor_3x3(F_E)
+
+    # Compute delta(cofactor) for Fe
+    del_cofactor = cofactor_3x3(del_elastic)
+
+    # Compute "A" term for the force
+    # Co-rotational term: 2 * mu * (delta(Fe) - delta(R))
+    Ap = (del_elastic - del_rotate) * (2.0 * mu)
+
+    # Primary contour term
+    cofactor *= frobenius_inner_product(del_elastic, cofactor)  # TODO: frobeniusInnerProduct
+    del_cofactor *= (wp.determinant(F_E) - 1.0)
+    cofactor += del_cofactor
+    cofactor *= lambda_
+    Ap += cofactor
+
+    # Compute deltaForce
+    return volume * (Ap @ (wp.transpose(F_E) @ weight_gradient))
+
 
 @wp.kernel
 def initialize_positions_kernel(
     positions: wp.array(dtype=wp.vec3),
-    grid_size: int,
-    grid_space: float):
+    grid_size: int):
     # Grid position is actually grid index
     
     tid = wp.tid()  # Thread ID for the current grid node
@@ -52,7 +149,6 @@ def initialize_positions_kernel(
     z = tid % grid_size
 
     # Set the position of the grid node
-    # positions[tid] = wp.vec3(float(x), float(y), float(z)) * grid_space
     positions[tid] = wp.vec3(float(x), float(y), float(z))
 
 @wp.kernel
@@ -62,47 +158,16 @@ def update_velocity_star_kernel(
     forces: wp.array(dtype=wp.vec3),
     mass: wp.array(dtype=float),
     gravity: wp.vec3,
-    timestep: float):
+    timestep: float,
+    active: wp.array(dtype=wp.bool)):
     
     tid = wp.tid()
-    if mass[tid] > 0.0:
+    if active[tid]:
         velocities_star[tid] = velocities[tid] + (forces[tid] / mass[tid] + gravity) * timestep
 
         # velocities_star[tid] = velocities[tid] + gravity * timestep
         # print("Gravity")
         # print(gravity)
-
-# @wp.kernel
-# def compute_weights_kernel(
-#     particle_positions: wp.array(dtype=wp.vec3),
-#     grid_positions: wp.array(dtype=wp.vec3),
-#     weights: wp.array(dtype=float),
-#     grid_size: int,
-#     grid_space: float):
-    
-#     tid = wp.tid()
-#     particle_pos = particle_positions[tid]
-
-#     for i in range(-2, 3):
-#         for j in range(-2, 3):
-#             for k in range(-2, 3):
-#                 x = wp.floor(particle_pos[0] / grid_space) + float(i)
-#                 y = wp.floor(particle_pos[1] / grid_space) + float(j)
-#                 z = wp.floor(particle_pos[2] / grid_space) + float(k)
-
-#                 # Ensure each coordinate is within valid bounds
-#                 if x < 0 or x >= grid_size or y < 0 or y >= grid_size or z < 0 or z >= grid_size:
-#                     continue
-
-#                 # Compute flat index from valid 3D indices
-#                 node_idx = int(x) * grid_size * grid_size + int(y) * grid_size + int(z)
-                
-#                 grid_pos = grid_positions[node_idx]
-#                 dx = (particle_pos[0] - grid_pos[0]*grid_space - 0.5 * grid_space) / grid_space
-#                 dy = (particle_pos[1] - grid_pos[1]*grid_space - 0.5 * grid_space) / grid_space
-#                 dz = (particle_pos[2] - grid_pos[2]*grid_space - 0.5 * grid_space) / grid_space
-#                 weight = N(dx) * N(dy) * N(dz)
-#                 wp.atomic_add(weights, node_idx, weight)
 
 @wp.kernel
 def clear_kernel(
@@ -111,6 +176,8 @@ def clear_kernel(
     grid_velocities_star: wp.array(dtype=wp.vec3),
     grid_new_velocities: wp.array(dtype=wp.vec3),
     grid_forces: wp.array(dtype=wp.vec3),
+    active: wp.array(dtype=bool),
+    imp_active: wp.array(dtype=bool)
 ):
     tid = wp.tid()
     grid_mass[tid] = 0.0
@@ -118,6 +185,8 @@ def clear_kernel(
     grid_velocities_star[tid] = wp.vec3(0.0, 0.0, 0.0)
     grid_new_velocities[tid] = wp.vec3(0.0, 0.0, 0.0)
     grid_forces[tid] = wp.vec3(0.0, 0.0, 0.0)
+    # active[tid] = False
+    # imp_active[tid] = False
 
 @wp.kernel
 def transfer_mass_and_velocity_kernel(
@@ -129,7 +198,10 @@ def transfer_mass_and_velocity_kernel(
     grid_velocities: wp.array(dtype=wp.vec3),
     grid_mass: wp.array(dtype=float),
     grid_space: float,
-    grid_size: int):
+    grid_size: int,
+    active: wp.array(dtype=bool),
+    weight_epsilon: float
+    ):
 
     tid = wp.tid()
     particle_pos = particle_positions[tid]
@@ -164,19 +236,22 @@ def transfer_mass_and_velocity_kernel(
                 dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space - 0.5 * grid_space) / grid_space
 
                 weight = N(dx) * N(dy) * N(dz)
-
-                wp.atomic_add(grid_mass, node_idx, particle_mass * weight)
-                wp.atomic_add(grid_velocities, node_idx, particle_vel * particle_mass * weight)
+                if weight > weight_epsilon:
+                    wp.atomic_add(grid_mass, node_idx, particle_mass * weight)
+                    wp.atomic_add(grid_velocities, node_idx, particle_vel * particle_mass * weight)
+                    active[tid] = True
 
 @wp.kernel
 def normalize_grid_velocity_kernel(
     # Step 1 - Part 2
     grid_velocities: wp.array(dtype=wp.vec3),
-    grid_mass: wp.array(dtype=float)):
+    grid_mass: wp.array(dtype=float),
+    active: wp.array(dtype=bool)):
+
     tid = wp.tid()
 
     # Only normalize if mass is non-zero
-    if grid_mass[tid] > 0.0:
+    if active[tid]:
         grid_velocities[tid] = grid_velocities[tid] / grid_mass[tid]
         # print("Grid transfer velocities:")
         # print(grid_velocities[tid])
@@ -312,6 +387,169 @@ def explicit_update_velocity_kernel(
     grid_new_velocities[tid] = grid_velocities_star[tid]
 
 @wp.kernel
+def implicit_initialize_r_kernel(
+    new_velocities: wp.array(dtype=wp.vec3),
+    r: wp.array(dtype=wp.vec3),
+    active: wp.array(dtype=bool),
+    imp_active: wp.array(dtype=bool),
+    err: wp.array(dtype=wp.vec3)
+):
+    tid = wp.tid()
+    imp_active[tid] = active[tid]
+    if imp_active[tid]:
+        r[tid] = new_velocities[tid]
+        err[tid] = wp.vec3(1.0, 1.0, 1.0)
+
+@wp.kernel
+def implicit_initialize_rEr_kernel(
+    node_new_velocities: wp.array(dtype=wp.vec3),
+    node_r: wp.array(dtype=wp.vec3),
+    node_p: wp.array(dtype=wp.vec3),
+    node_Er: wp.array(dtype=wp.vec3),
+    node_rEr: wp.array(dtype=float),
+    imp_active: wp.array(dtype=bool),
+):
+    tid = wp.tid()
+    if imp_active[tid]:
+        node_r[tid] = node_new_velocities[tid] - node_Er[tid]
+        node_p[tid] = node_r[tid]
+        node_rEr[tid] = wp.dot(node_r[tid], node_Er[tid])
+
+@wp.kernel
+def implicit_initialize_Ep_kernel(
+    node_Ep: wp.array(dtype=wp.vec3),
+    node_Er: wp.array(dtype=wp.vec3),
+    imp_active: wp.array(dtype=bool),
+):
+    tid = wp.tid()
+    if imp_active[tid]:
+        node_Ep[tid] = node_Er[tid]
+
+@wp.kernel
+def implicit_update_velocity_kernel(
+    new_velocities: wp.array(dtype=wp.vec3),
+    r: wp.array(dtype=wp.vec3),
+    Ep: wp.array(dtype=wp.vec3),
+    p: wp.array(dtype=wp.vec3),
+    rEr: wp.array(dtype=float),
+    err: wp.array(dtype=wp.vec3),
+    imp_active: wp.array(dtype=bool),
+    max_implicit_error: float,
+    done: wp.array(dtype=int)  # Shared across threads, 1 means "done", 0 means "not done"
+):
+    tid = wp.tid()
+    if imp_active[tid]:
+        div = wp.dot(Ep[tid], Ep[tid])
+        alpha = rEr[tid] / div
+        err[tid] = alpha * p[tid]
+
+        # Check convergence
+        error = wp.length(err[tid])
+        if error < max_implicit_error:
+            imp_active[tid] = False
+            return
+        else:
+            wp.atomic_min(done, 0, 0)
+
+        new_velocities[tid] += err[tid]
+        r[tid] -= alpha * Ep[tid]
+
+@wp.kernel
+def implicit_update_gradient_kernel(
+    r: wp.array(dtype=wp.vec3),
+    Er: wp.array(dtype=wp.vec3),
+    p: wp.array(dtype=wp.vec3),
+    Ep: wp.array(dtype=wp.vec3),
+    rEr: wp.array(dtype=float),
+    imp_active: wp.array(dtype=bool),
+):
+    tid = wp.tid()
+    if imp_active[tid]:
+        temp = wp.dot(r[tid], Er[tid])
+        beta = temp / rEr[tid]
+        rEr[tid] = temp
+        p[tid] = beta * p[tid] + r[tid]
+        Ep[tid] = beta * Ep[tid] + Er[tid]
+
+@wp.kernel
+def implicit_recompute_forces_kernel(
+    F_Es: wp.array(dtype=wp.mat33),
+    polar_rs: wp.array(dtype=wp.mat33),
+    polar_ss: wp.array(dtype=wp.mat33),
+    particle_volumes: wp.array(dtype=float),
+    particle_positions: wp.array(dtype=wp.vec3),
+    mu: float,
+    lambda_: float,
+    matrix_epsilon: float,
+    grid_positions: wp.array(dtype=wp.vec3),
+    grid_forces: wp.array(dtype=wp.vec3),
+    imp_active: wp.array(dtype=bool),
+    grid_r: wp.array(dtype=wp.vec3),
+    grid_size: int,
+    grid_space: float,
+    timestep: float):
+
+    tid = wp.tid()
+
+    # Access particle data
+    particle_pos = particle_positions[tid]
+    particle_volume = particle_volumes[tid]
+
+    # Loop over grid nodes within range
+    for i in range(-2, 3):
+        for j in range(-2, 3):
+            for k in range(-2, 3):
+                x = wp.floor(particle_pos[0] / grid_space) + float(i)
+                y = wp.floor(particle_pos[1] / grid_space) + float(j)
+                z = wp.floor(particle_pos[2] / grid_space) + float(k)
+
+                # Ensure each coordinate is within valid bounds
+                if x < 0 or x >= grid_size or y < 0 or y >= grid_size or z < 0 or z >= grid_size:
+                    continue
+
+                # Compute flat index from valid 3D indices
+                node_idx = int(x) * grid_size * grid_size + int(y) * grid_size + int(z)
+
+                grid_pos = grid_positions[node_idx]
+
+                # Compute weight gradient
+                dx = (particle_pos[0] - grid_pos[0]*grid_space - 0.5 * grid_space) / grid_space
+                dy = (particle_pos[1] - grid_pos[1]*grid_space - 0.5 * grid_space) / grid_space
+                dz = (particle_pos[2] - grid_pos[2]*grid_space - 0.5 * grid_space) / grid_space
+
+                weight_gradient = wp.vec3(
+                    (1.0 / grid_space) * N_prime(dx) * N(dy) * N(dz),
+                    (1.0 / grid_space) * N(dx) * N_prime(dy) * N(dz),
+                    (1.0 / grid_space) * N(dx) * N(dy) * N_prime(dz),
+                )
+
+                if imp_active[node_idx]:
+                    # Retrieve per-particle properties
+                    F_E = F_Es[tid]
+                    polar_r = polar_rs[tid]
+                    polar_s = polar_ss[tid]
+
+                    # Compute delta force
+                    delta_f = delta_force_3d(grid_r[node_idx], weight_gradient, F_E, polar_r, polar_s, particle_volume, mu, lambda_, matrix_epsilon, timestep)
+
+                    # Accumulate force
+                    wp.atomic_add(grid_forces, node_idx, delta_f)
+
+@wp.kernel
+def implicit_recompute_grid_Er_kernel(
+    imp_active: wp.array(dtype=bool),
+    Er: wp.array(dtype=wp.vec3),
+    r: wp.array(dtype=wp.vec3),
+    implicit_ratio: float,
+    timestep: float,
+    mass: wp.array(dtype=float),
+    force: wp.array(dtype=wp.vec3)):
+
+    tid = wp.tid()
+    if imp_active[tid]:
+        Er[tid] = r[tid] - implicit_ratio * timestep / mass[tid] * force[tid]
+
+@wp.kernel
 def update_predicted_positions_kernel(
     positions: wp.array(dtype=wp.vec3),
     velocities: wp.array(dtype=wp.vec3),
@@ -325,9 +563,6 @@ def update_predicted_positions_kernel(
 class Grid:
     def __init__(self, size, grid_space=1.0):
         # Initialize a grid with a given size
-        # self.nodes = [[GridNode((i, j, k)) for k in range(size)] for i in range(size) for j in range(size)]
-        # self.nodes = [[[GridNode((i, j, k)) for k in range(size)] for j in range(size)] for i in range(size)]
-        self.nodes = []
         self.size = size
         self.grid_space = grid_space
 
@@ -338,6 +573,15 @@ class Grid:
         self.velocities_star = wp.zeros(size**3, dtype=wp.vec3, device="cuda")
         self.forces = wp.zeros(size**3, dtype=wp.vec3, device="cuda")
         self.mass = wp.zeros(size**3, dtype=float, device="cuda")
+        self.active = wp.zeros(size**3, dtype=wp.bool, device="cuda")
+
+        self.r = wp.zeros(size**3, dtype=wp.vec3, device="cuda")
+        self.p = wp.zeros(size**3, dtype=wp.vec3, device="cuda")
+        self.Er = wp.zeros(size**3, dtype=wp.vec3, device="cuda")
+        self.Ep = wp.zeros(size**3, dtype=wp.vec3, device="cuda")
+        self.rEr = wp.zeros(size**3, dtype=float, device="cuda")
+        self.err = wp.ones(size**3, dtype=wp.vec3, device="cuda")
+        self.imp_active = wp.zeros(size**3, dtype=wp.bool, device="cuda")
 
         wp.launch(
             kernel=initialize_positions_kernel,
@@ -345,7 +589,6 @@ class Grid:
             inputs=[
                 self.positions,
                 size,
-                grid_space,
             ],
         )
 
@@ -353,7 +596,7 @@ class Grid:
         wp.launch(
             kernel=clear_kernel,
             dim=self.size**3,
-            inputs=[self.mass, self.velocities, self.velocities_star, self.new_velocities, self.forces]
+            inputs=[self.mass, self.velocities, self.velocities_star, self.new_velocities, self.forces, self.active, self.imp_active]
         )
 
     def transfer_mass_and_velocity(self, particle_system: ParticleSystem):
@@ -373,6 +616,8 @@ class Grid:
                 self.mass,
                 self.grid_space,
                 self.size,
+                self.active,
+                WEIGHT_EPSILON
             ],
         )
 
@@ -380,7 +625,7 @@ class Grid:
         wp.launch(
             kernel=normalize_grid_velocity_kernel,
             dim=len(self.positions),  # Number of grid nodes
-            inputs=[self.velocities, self.mass],
+            inputs=[self.velocities, self.mass, self.active],
         )
 
     def setup_particle_density_volume(self, particle_system: ParticleSystem):
@@ -435,7 +680,8 @@ class Grid:
                 self.forces,        # This one has nan value
                 self.mass,
                 GRAVITY,
-                TIMESTEP
+                TIMESTEP,
+                self.active
             ]
         )
 
@@ -522,6 +768,88 @@ class Grid:
             kernel=explicit_update_velocity_kernel,
             dim=self.size**3,
             inputs=[self.new_velocities, self.velocities_star],
+        )
+
+    def implicit_update_velocity(self, particle_system: ParticleSystem):
+        wp.launch(
+            implicit_initialize_r_kernel, 
+            dim=self.size**3,
+            inputs=[self.new_velocities, self.r, self.active, self.imp_active, self.err])
+        self.recompute_implicit_forces(particle_system)
+
+        wp.launch(
+            implicit_initialize_rEr_kernel, 
+            dim=self.size**3,
+            inputs=[self.new_velocities, self.r, self.p, self.Er, self.rEr, self.imp_active])
+        self.recompute_implicit_forces(particle_system)
+
+        wp.launch(
+            implicit_initialize_Ep_kernel, 
+            dim=self.size**3,
+            inputs=[self.Ep, self.Er, self.imp_active])
+        
+        for _ in range(MAX_IMPLICIT_ITERS):
+            done = wp.array([1], dtype=int, device="cuda")  # 1 means done, 0 means not done
+            wp.launch(implicit_update_velocity_kernel, 
+                      dim=self.size**3, 
+                      inputs=[self.new_velocities,
+                              self.r,
+                              self.Ep,
+                              self.p,
+                              self.rEr,
+                              self.err,
+                              self.imp_active,
+                              MAX_IMPLICIT_ERR,
+                              done])
+
+            done_value = done.numpy()[0]  # Copy the flag to the host
+            if done_value == 1:
+                print("Converged!")
+                break
+            self.recompute_implicit_forces(particle_system)
+
+            wp.launch(implicit_update_gradient_kernel, 
+                      dim=self.size**3, 
+                      inputs=[self.r,
+                              self.Er,
+                              self.p,
+                              self.Ep,
+                              self.rEr,
+                              self.imp_active])
+
+    def recompute_implicit_forces(self, particle_system: ParticleSystem):
+        wp.launch(
+            implicit_recompute_forces_kernel, 
+            dim=particle_system.num_particles,
+            inputs=[particle_system.F_E,
+                    particle_system.polar_r,
+                    particle_system.polar_s,
+                    particle_system.initial_volumes,
+                    particle_system.positions,
+                    particle_system.mu_0,
+                    particle_system.lambda_0,
+                    MATRIX_EPSILON,
+                    self.positions,
+                    self.forces,
+                    self.imp_active,
+                    self.r,
+                    self.size,
+                    self.grid_space,
+                    TIMESTEP
+                ],
+        )
+        
+        wp.launch(
+            implicit_recompute_grid_Er_kernel, 
+            dim=self.size**3,
+            inputs=[self.imp_active,
+                    self.Er,
+                    self.r,
+                    IMPLICIT_RATIO,
+                    TIMESTEP,
+                    self.mass,
+                    self.forces
+                    ]
         )
 
 def count_nan_values_in_array(array: wp.array):

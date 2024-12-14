@@ -15,11 +15,11 @@ class MPMSolver:
 
         self.collision_objects = [
             # Floor
-            CollisionObject(
-                level_set=lambda x: x[1] - 0.5,  # Floor at z = 0.5
-                velocity_function=lambda x: wp.vec3(0.0, 0.0, 0.0),  # Static floor     # min level set value -0.445
-                friction_coefficient=0.5
-            ),
+            # CollisionObject(
+            #     level_set=lambda x: x[1] - 0.5,  # Floor at z = 0.5
+            #     velocity_function=lambda x: wp.vec3(0.0, 0.0, 0.0),  # Static floor     # min level set value -0.445
+            #     friction_coefficient=0.5
+            # ),
             # # Wall
             CollisionObject(
                 level_set=lambda x: 6.0 - x[0],  # Wall at x = 6.0
@@ -27,11 +27,11 @@ class MPMSolver:
                 friction_coefficient=0.5
             ),
             # Slide
-        #     CollisionObject(
-        #         level_set=lambda x: x[1] - (-0.5 * x[0] + 3.0),  # Slide: y = -0.5 * x + 3
-        #         velocity_function=lambda x: wp.vec3(0.0, 0.0, 0.0),  # Static slide
-        #         friction_coefficient=0.1  # Low friction for sliding
-        #     )
+            CollisionObject(
+                level_set=lambda x: x[1] - (-0.5 * x[0] + 3.0),  # Slide: y = -0.5 * x + 3
+                velocity_function=lambda x: wp.vec3(0.0, 0.0, 0.0),  # Static slide
+                friction_coefficient=0.1  # Low friction for sliding
+            )
         ]
         # after rasterization
         # self.grid.setup_particle_density_volume(p)
@@ -61,6 +61,7 @@ class MPMSolver:
         # Step 6
         self.grid.explicit_update_velocity()
         # print("Step 6")
+        # self.grid.implicit_update_velocity(self.particle_system)
 
     def update_particle_velocities_and_positions(self):
         # Update particle velocities and positions based on grid data
