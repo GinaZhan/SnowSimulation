@@ -1,11 +1,6 @@
-# import warp as wp
-
-# wp.init()
-# # main.py
-
-from simulation.warp_mpm_solver import MPMSolver
-from simulation.warp_particles import ParticleSystem
-from simulation.warp_grid import Grid
+from simulation.mpm_solver import MPMSolver
+from simulation.particles import ParticleSystem
+from simulation.grid import Grid
 from simulation.constants import GRID_SPACE
 from rendering.opengl_render import OpenGLRenderer
 
@@ -22,7 +17,7 @@ import pickle
 NEW_SIMULATION = True
 
 # directory that stores the frames
-frames_dir = "simulation_results/snowball_0.001_8000_wall"
+frames_dir = "simulation_results/2_snowballs_0.001"
 os.makedirs(frames_dir, exist_ok=True)
 
 def save_rendered_frame(frame_id, window):
@@ -89,7 +84,7 @@ def load_simulation_state(solver, file_path="simulation_state.pkl"):
 
 
 def setup_simulation():
-    num_particles = 8000    # There should be 4-8 particles in one GridNode
+    # num_particles = 20000    # There should be 4-8 particles in one GridNode
 
     # Initialize particle system and grid
     # particle_system = ParticleSystem(num_particles)
@@ -98,21 +93,22 @@ def setup_simulation():
 
     radius = 0.3
     # positions = wp.zeros((num_particles, 3), dtype=wp.vec3, device="cuda")
-    velocities = wp.vec3(10.0, 0.0, 0.0)
+    # velocities = wp.vec3(10.0, 0.0, 0.0)
     pos_list = []
     # vel_list = []
 
     # cube_num_particles = int(num_particles/3)
-    # Initialize particle positions and velocities
-    for i in range(num_particles):
-        pos = np.random.uniform(-radius, radius, 3)
-        while np.linalg.norm(pos) > radius:
-            pos = np.random.uniform(-radius, radius, 3)
-        pos[0] += 3
-        pos[1] += 3
-        # pos[1] += 1.0
-        pos[2] += 3
-        pos_list.append(pos)
+    # # Initialize particle positions and velocities
+    # for i in range(cube_num_particles):
+    #     pos = np.random.uniform(-radius, radius, 3)
+    #     # # This while loop determines snowcube or snowball
+    #     # while np.linalg.norm(pos) > radius:
+    #     #     pos = np.random.uniform(-radius, radius, 3)
+    #     pos[0] += 3.1
+    #     # pos[1] += 3.15
+    #     pos[1] += 1.0
+    #     pos[2] += 3
+    #     pos_list.append(pos)
 
     # for i in range(cube_num_particles):
     #     pos = np.random.uniform(-radius, radius, 3)
@@ -134,18 +130,37 @@ def setup_simulation():
     #     pos[2] += 3
     #     pos_list.append(pos)
 
-        # phi = np.random.uniform(0, 2 * np.pi)
-        # costheta = np.random.uniform(-1, 1)
-        # u = np.random.uniform(0, 1)
+    num_snowball = int(num_particles / 2)
 
-        # theta = np.arccos(costheta)
-        # r = radius * (u ** (1/3))  # Ensures uniform radial distribution
+    for i in range(num_snowball):
+        pos = np.random.uniform(-radius, radius, 3)
+        while np.linalg.norm(pos) > radius:
+            pos = np.random.uniform(-radius, radius, 3)
+        pos[0] += 0.5
+        pos[1] += 3
+        # pos[1] += 0.8
+        pos[2] += 3
+        pos_list.append(pos)
 
-        # x = r * np.sin(theta) * np.cos(phi)
-        # y = r * np.sin(theta) * np.sin(phi)
-        # z = r * np.cos(theta)
+    for i in range(num_snowball):
+        pos = np.random.uniform(-radius, radius, 3)
+        while np.linalg.norm(pos) > radius:
+            pos = np.random.uniform(-radius, radius, 3)
+        pos[0] += 6.0
+        pos[1] += 3
+        # pos[1] += 0.8
+        pos[2] += 3
+        pos_list.append(pos)
 
-        # pos_list.append([x + 3, y + 1.2, z + 3])  # Offset the center
+    first_snowball = [wp.vec3(5, 0, 0) for _ in range(num_snowball)]
+    second_snowball = [wp.vec3(-5, 0, 0) for _ in range(num_snowball)]
+
+    # Concatenate the lists
+    vec_list = first_snowball + second_snowball
+
+    # Convert the list to a wp.array
+    velocities = wp.array(vec_list, dtype=wp.vec3)
+    
 
     positions = wp.array([wp.vec3(*p) for p in pos_list], dtype=wp.vec3, device="cuda")
     

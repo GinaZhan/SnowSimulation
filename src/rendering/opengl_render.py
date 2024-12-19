@@ -110,7 +110,7 @@ class OpenGLRenderer:
         glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "view"), 1, GL_TRUE, view)
         glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "projection"), 1, GL_TRUE, projection)
 
-        print("Max Density: ", self.max_density)
+        # print("Max Density: ", self.max_density)
         glUniform1f(glGetUniformLocation(self.shader_program, "maxdensity"), self.max_density)
 
         # Set point size

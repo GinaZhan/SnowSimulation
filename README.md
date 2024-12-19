@@ -1,56 +1,119 @@
-# Snow Simulation Project Structure
+# MPM Snow Simulation Project
 
-This project aims to simulate snow behavior using the Material Point Method (MPM), GPU acceleration, and OpenGL for rendering. The structure includes key components for simulation, rendering, utilities, and tests.
+This project implements a Material Point Method (MPM) for simulating snow behaviors, inspired by the paper ["A Material Point Method for Snow Simulation"](https://disneyanimation.com/publications/a-material-point-method-for-snow-simulation/) by Stomakhin et al. The goal is to simulate various snow interactions, including falling, piling, collisions, and different stickiness levels.
+
+## Features Implemented
+
+1. **Basic MPM Framework**:
+   - Particle-grid transfer using APIC (Affine Particle-In-Cell).
+   - Explicit time-stepping for updating particle positions and velocities.
+   
+2. **Snow Mechanics**:
+   - Elastoplastic deformation modeled using the Cauchy stress tensor.
+   - Deformation gradient split into elastic and plastic components (F = F_E * F_P).
+   - Support for critical compression and stretch thresholds for plastic flow.
+
+3. **Grid Operations**:
+   - Mass and velocity transfers between particles and grid nodes.
+   - Stress-based forces and grid velocity updates.
+
+4. **Visualization**:
+   - OpenGL-based rendering for visualizing snow behaviors.
+   - Options for 3D rendering and parameter tuning during runtime.
+
+## Why Use Explicit Time-Stepping?
+
+- **Simplicity**: Explicit time-stepping is straightforward to implement and debug, making it suitable for initial development.
+- **Efficiency for Small Steps**: While explicit methods require smaller time steps for stability, the simplicity of implementation outweighs the performance cost for moderate-scale simulations.
+- **Compatibility**: The explicit approach works well with APIC transfers and elastoplastic updates, ensuring accurate results without introducing additional solver complexity.
+
+## Resources Used
+
+1. **Papers and Reference Code**:
+   - ["A Material Point Method for Snow Simulation"](https://disneyanimation.com/publications/a-material-point-method-for-snow-simulation/).
+   - ["Snow Implicit Math"](https://github.com/Azmisov/snow/blob/master/papers/snow_implicit_math.pdf).
+   - ["SnowSim Code"](https://github.com/Azmisov/snow/tree/master/SnowSim)
+   - ["Snow Code"](https://github.com/JAGJ10/Snow/tree/master)
+
+2. **Libraries and Tools**:
+   - **NVIDIA Warp**: For GPU-accelerated computations.
+   - **OpenGL**: For rendering the simulation.
+   - **Python**: Primary language for implementation, with dependencies for numerical and graphical processing.
 
 ## Project Structure
 
+```
+MPM_Snow_Simulation/
+├── src/
+│   ├── simulation/
+│   │   ├── mpm_solver.py
+│   │   ├── particles.py
+│   │   ├── grid.py
+│   │   ├── snow_material.py
+│   ├── rendering/
+│   │   ├── opengl_renderer.py
+│   │   ├── shaders/
+│   ├── utilities/
+│       ├── config.py
+│       ├── data_handler.py
+├── tests/
+│   ├── test_simulation.py
+│   ├── test_rendering.py
+├── README.md
+├── requirements.txt
+├── run_simulation.py
+```
 
-## Folder and File Descriptions
+## Instructions to Compile and Test
 
-### 1. `src/`
-This folder contains the main source code of the project.
+### Prerequisites
 
-- **`simulation/`**: Contains all the logic for the MPM snow simulation.
-  - `mpm_solver.py`: Implements the Material Point Method (MPM) for simulating snow.
-  - `particles.py`: Manages the particle system (Lagrangian particles).
-  - `grid.py`: Implements the Eulerian grid for snow interactions with the environment.
-  - `snow_material.py`: Defines the material properties of snow (e.g., plasticity, stickiness).
-  - `stress_forces.py`: Stress-based forces and constitutive relation logic
-  
-- **`rendering/`**: Handles OpenGL-based real-time rendering of the snow simulation.
-  - `opengl_renderer.py`: Implements the OpenGL renderer to visualize the snow simulation.
-  - `shaders/`: Contains the vertex and fragment shaders for snow rendering.
-    - `particle.vert`: Vertex shader for rendering snow particles.
-    - `particle.frag`: Fragment shader for snow particles.
-    - `snow_frag.frag`: Fragment shader for rendering snow-specific visuals.
-  - `camera.py`: Camera control for navigating the scene during rendering.
+1. **Hardware**:
+   - A system with an NVIDIA GPU (GTX 1050 Ti or higher recommended).
 
-- **`utils/`**: Contains utility functions for configuration, timing, and data handling.
-  - `config.py`: Stores simulation and rendering configuration parameters.
-  - `data_loader.py`: Helper for loading and saving simulation data.
-  - `timer.py`: Provides performance measurement tools.
-  - `video_export.py`: Exports the rendered frames into a video file.
+2. **Software**:
+   - Python 3.8+
+   - Dependencies specified in `requirements.txt`:
+     - numpy
+     - pyopengl
+     - nvidia-warp
+     - pytest (for testing)
 
-- **`main.py`**: The main entry point for running the simulation and rendering.
+### Setup
 
-### 2. `tests/`
-This folder contains unit tests to ensure the simulation and rendering components work correctly.
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/username/MPM_Snow_Simulation.git
+   cd MPM_Snow_Simulation
+   ```
 
-- `test_mpm_solver.py`: Tests for the MPM solver.
-- `test_opengl_renderer.py`: Tests for the OpenGL renderer.
-- `test_particles.py`: Tests for the particle system.
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### 3. `resources/`
-Optional resources such as 3D models and textures for the simulation.
+### Running the Simulation
 
-- **`models/`**: Optional 3D models to simulate collisions (e.g., walls, objects).
-- **`textures/`**: Optional textures for the ground, snow, and other visual elements.
-- **`shaders/`**: Additional shaders for visual effects, if needed.
+1. Adjust snow particles in `main.py`. Three snowballs or snowcubes are provided and can be controlled by commenting it out. The total number of 
+particles per grid node can be modified. The constant 'NEW_SIMULATION' controls whether to start a new simulation or reload an old state and keep
+simulating from there.
 
-### 4. `video_output/`
-This folder will store the generated video frames and final simulation output.
+2. Adjust parameters in `constants.py` for different scenarios, such as snow stickiness or timestep.
 
-## Additional Files
+3. Three collision objects are provided in `mpm_solver.py` and can be chosen by commenting and uncommenting.
 
-- **`README.md`**: Documentation for how to run the project, set it up, and use the simulation.
-- **`requirements.txt`**: List of Python dependencies required to run the project.
+4. Run the simulation script:
+   ```bash
+   python main.py
+   ```
+
+## Future Work
+
+- Adding implicit time-stepping for better stability with larger time steps.
+- Enhancing visualization with more realistic snow rendering.
+- Optimizing performance for larger simulations using parallelization.
+
+## Acknowledgments
+
+Thanks to the authors of the referenced papers and open-source contributors for their valuable resources and tools that made this project possible.
+
