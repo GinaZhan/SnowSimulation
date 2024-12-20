@@ -568,7 +568,7 @@ def update_predicted_positions_kernel(
 class Grid:
     def __init__(self, size, grid_space=1.0):
         # Initialize a grid with a given size
-        self.size = size
+        self.size = size    # number of grid nodes per direction
         self.grid_space = grid_space
 
         # Initialize grid properties as arrays

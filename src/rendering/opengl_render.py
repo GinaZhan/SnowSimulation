@@ -55,11 +55,11 @@ class OpenGLRenderer:
 
         # Initialize camera
         self.camera = Camera(
-            position=[3.0, 3.0, 20.0],
-            target=[3.0, 3.0, 3.0],
+            position=[0.75, 0.75, 2.5],
+            target=[0.75, 0.75, 0.75],
             up=[0.0, 1.0, 0.0],
-            fov=20.0,
-            aspect=800 / 600,
+            fov=45.0,
+            aspect=1.0,
             near=0.1,
             far=100.0
         )

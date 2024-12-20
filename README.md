@@ -107,6 +107,11 @@ simulating from there.
    python main.py
    ```
 
+5. After the frames are saved under the certain directory, use the following command to create videos:
+   ```bash
+   ffmpeg -framerate [framerate] -i simulation_frames/frame_%04d.png -c:v libx264 -r 30 -pix_fmt yuv420p simulation_video.mp4
+   ```
+
 ## Future Work
 
 - Adding implicit time-stepping for better stability with larger time steps.
