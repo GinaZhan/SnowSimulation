@@ -290,25 +290,11 @@ def setup_particle_density_volume_kernel(
                 dy = (particle_pos[1] - grid_positions[node_idx][1]*grid_space - 0.5 * grid_space) / grid_space
                 dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space - 0.5 * grid_space) / grid_space
 
-                # if i==0 and j==0 and k==0:
-                #     print("dx")
-                #     print(dx)
-                #     print("dy")
-                #     print(dy)
-                #     print("dz")
-                #     print(dz)
-
                 weight = N(dx) * N(dy) * N(dz)
-                # total_weight += weight + 0.01
                 # if weight > weight_epsilon:
                     # particle_density += grid_masses[node_idx] / (grid_space * grid_space * grid_space) * weight
                 particle_density += grid_masses[node_idx] / (grid_space * grid_space * grid_space) * weight # TODO: weight_epsilon?
-                # total_mass += grid_masses[node_idx]
 
-    # print("Density total weight")
-    # print(total_weight)
-    # print("Density total mass")
-    # print(total_mass)
     particle_densities[tid] = particle_density
     if particle_density > 0.0:
         particle_volumes[tid] = particle_masses[tid] / particle_density
@@ -606,8 +592,6 @@ class Grid:
 
     def transfer_mass_and_velocity(self, particle_system: ParticleSystem):
         # Step 1 - Rasterize particle data to the grid - Transfer mass and velocity to grid nodes from particles
-
-        # self.clear()    # prevent nodes from collecting velocity, mass, force from previous steps
 
         wp.launch(
             kernel=transfer_mass_and_velocity_kernel,

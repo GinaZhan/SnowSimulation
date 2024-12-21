@@ -12,6 +12,5 @@ uniform float maxdensity;
 
 void main() {
     fragDensity = density / maxdensity;  // Pass the density to the fragment shader
-    // fragDensity = maxdensity;  // Pass the density to the fragment shader
     gl_Position = projection * view * model * vec4(position, 1.0);
 }

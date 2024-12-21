@@ -1,5 +1,3 @@
-# particles.py
-
 import warp as wp
 from .constants import *
 from .collision_object import *
@@ -312,12 +310,6 @@ def update_particle_velocity_kernel(
         wp.floor(particle_pos[2] / grid_space),
     )
 
-    # print("Particle Position:")
-    # print(particle_pos)
-    # print("Grid Center:")
-    # print(grid_center)
-    
-    # total_weight = float(0.0)
     # Loop over nearby grid nodes
     for i in range(-2, 3):
         for j in range(-2, 3):
@@ -342,35 +334,11 @@ def update_particle_velocity_kernel(
                 dz = (particle_pos[2] - grid_positions[node_idx][2]*grid_space - 0.5 * grid_space) / grid_space
 
                 weight = N(dx) * N(dy) * N(dz)
-                # total_weight += weight
-
-                # print("Node index: dx, dy, dz, weight")
-                # print(node_idx)
-                # print(dx)
-                # print(dy)
-                # print(dz)
-                # print(weight)
-                # print("Grid New Velocity:") # This is nan!!!
-                # print(grid_new_velocities[node_idx])
-                # print("Grid Velocity:")
-                # print(grid_velocities[node_idx])
 
                 # Update PIC and FLIP velocities
                 velocity_PIC += grid_new_velocities[node_idx] * weight
                 velocity_FLIP += (grid_new_velocities[node_idx] - grid_velocities[node_idx]) * weight
 
-                # if i==0 and j==0 and k==0:
-                #     print("Grid new velocities")
-                #     print(grid_new_velocities[node_idx])
-                #     print("Grid velocities")
-                #     print(grid_velocities[node_idx])
-
-    # print("velocity PIC")
-    # print(velocity_PIC)
-    # print("velocity FLIP")
-    # print(velocity_FLIP)
-    # print("total weight")
-    # print(total_weight)
     # Blend PIC and FLIP velocities
     particle_velocities[tid] = (1.0 - alpha) * velocity_PIC + alpha * velocity_FLIP
 
@@ -425,7 +393,6 @@ class ParticleSystem:
         self.initial_volumes = wp.ones(num_particles, dtype=float, device="cuda")
 
         # Deformation gradients
-        # identity_matrix = wp.identity(3, dtype=wp.float32)  # Identity matrix for 3x3
         identity_matrix = wp.mat33(
             1.0, 0.0, 0.0,
             0.0, 1.0, 0.0,
@@ -510,32 +477,6 @@ class ParticleSystem:
 
     def update_velocity(self, grid, alpha=0.95):
         # Step 8 - Update particle velocities
-        # print("Particle Positions (before update):", self.positions.numpy())
-        # print("Particle Velocities (before update):", self.velocities.numpy())
-        
-        # # Print grid data
-        # print("Grid Positions:", grid.positions.numpy())
-        # print("Grid Velocities:", grid.velocities.numpy())
-        # print("Grid New Velocities:", grid.new_velocities.numpy())
-        # print("Grid Size:", grid.size)
-        # print("Grid Spacing:", grid.grid_space)
-        # print("Alpha:", alpha)
-
-        # velocities = grid.velocities.numpy()
-
-        # # Find the indices of nonzero vectors
-        # nonzero_indices = np.where(np.linalg.norm(velocities, axis=1) > 1e-8)[0]  # Use a small threshold to avoid floating-point noise
-        # nonzero_vectors = velocities[nonzero_indices]
-
-        # # Print the indices and corresponding non-zero vectors
-        # for idx, vec in zip(nonzero_indices, nonzero_vectors):
-        #     print(f"Index: {idx}, Vector: {vec}")
-        # nan_count = count_nan_values_in_array(grid.velocities)
-        # print(f"Number of NaN values in grid_velocities stage 7: {nan_count}")
-        # nan_count = count_nan_values_in_array(grid.new_velocities)
-        # print(f"Number of NaN values in grid_new_velocities stage 7: {nan_count}")
-        # nan_count = count_nan_values_in_array(self.velocities)
-        # print(f"Number of NaN values in particle_velocities stage 7: {nan_count}")
         
         wp.launch(
             kernel=update_particle_velocity_kernel,
@@ -551,12 +492,6 @@ class ParticleSystem:
                 alpha,
             ]
         )
-        # nan_count = count_nan_values_in_array(grid.new_velocities)
-        # print(f"Number of NaN values in grid_new_velocities stage 8: {nan_count}")
-        # nan_count = count_nan_values_in_array(grid.velocities)
-        # print(f"Number of NaN values in grid_velocities stage 8: {nan_count}")
-        # nan_count = count_nan_values_in_array(self.velocities)
-        # print(f"Number of NaN values in particle_velocities stage 8: {nan_count}")
 
     def apply_collisions(self, collision_objects):
         """

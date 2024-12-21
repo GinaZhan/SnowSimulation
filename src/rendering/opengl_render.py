@@ -16,9 +16,6 @@ class OpenGLRenderer:
         self.vbo = glGenBuffers(1)  # VBO for positions + densities
         self.camera = None
 
-        # print(particle_positions.shape)
-
-
     def initialize(self):
         # Compile shaders
         vertex_shader = self.load_shader("shaders/vertex_shader.glsl", GL_VERTEX_SHADER)
@@ -55,7 +52,7 @@ class OpenGLRenderer:
 
         # Initialize camera
         self.camera = Camera(
-            position=[0.75, 0.75, 2.5],
+            position=[0.75, 0.75, 2.7],
             target=[0.75, 0.75, 0.75],
             up=[0.0, 1.0, 0.0],
             fov=45.0,
@@ -101,16 +98,12 @@ class OpenGLRenderer:
 
         # Set up view and projection matrices
         view = self.camera.get_view_matrix()
-        # print("View Matrix:\n", view)
         projection = self.camera.get_projection_matrix()
-        # print("Projection Matrix:\n", projection)
         model = np.identity(4, dtype=np.float32)
-        # print("Model Matrix:\n", model)
         glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "model"), 1, GL_TRUE, model)
         glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "view"), 1, GL_TRUE, view)
         glUniformMatrix4fv(glGetUniformLocation(self.shader_program, "projection"), 1, GL_TRUE, projection)
 
-        # print("Max Density: ", self.max_density)
         glUniform1f(glGetUniformLocation(self.shader_program, "maxdensity"), self.max_density)
 
         # Set point size
@@ -118,6 +111,5 @@ class OpenGLRenderer:
 
         # Draw particles
         glBindVertexArray(self.vao)
-        print("Render position: ", self.particle_positions)
         glDrawArrays(GL_POINTS, 0, len(self.particle_positions))
         glBindVertexArray(0)
