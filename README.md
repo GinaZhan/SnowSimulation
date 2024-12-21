@@ -2,6 +2,10 @@
 
 This project implements a Material Point Method (MPM) for simulating snow behaviors, inspired by the paper ["A Material Point Method for Snow Simulation"](https://disneyanimation.com/publications/a-material-point-method-for-snow-simulation/) by Stomakhin et al. The goal is to simulate various snow interactions, including falling, piling, collisions, and different stickiness levels.
 
+## Simulation Output
+
+The simulation output videos are saved in the `video_output` directory.
+
 ## Features Implemented
 
 ### Material Point Method (MPM) for Snow Simulation
@@ -36,7 +40,7 @@ Particle velocities are updated using a combination of PIC (Particle-In-Cell) an
 Particle-based collisions are handled to ensure that particles do not pass through boundaries or other objects. This complements the grid-based collision handling.
 
 10. **Update Particle Positions**\
-Finally, particle positions are updated based on their velocities, completing the timestep. This step ensures the particles move according to the simulation dynamics.
+Particle positions are updated based on their velocities, completing the timestep. This step ensures the particles move according to the simulation dynamics.
 
 11. **Visualization**\
 OpenGL-based rendering for visualizing snow behaviors.
