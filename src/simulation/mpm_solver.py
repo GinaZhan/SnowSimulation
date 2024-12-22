@@ -20,13 +20,13 @@ class MPMSolver:
             ),
             # # # Wall
             # CollisionObject(
-            #     level_set=lambda x: 6.0 - x[0],  # Wall at x = 6.0
+            #     level_set=lambda x: 1.4 - x[0],  # Wall at x = 1.4
             #     velocity_function=lambda x: wp.vec3(0.0, 0.0, 0.0),  # Static wall
             #     friction_coefficient=0.5
             # ),
             # # Slide
             # CollisionObject(
-            #     level_set=lambda x: x[1] - (-0.5 * x[0] + 3.0),  # Slide: y = -0.5 * x + 3
+            #     level_set=lambda x: x[1] - (-0.5 * x[0] + 0.75),  # Slide: y = -0.5 * x + 0.75
             #     velocity_function=lambda x: wp.vec3(0.0, 0.0, 0.0),  # Static slide
             #     friction_coefficient=0.3  # Low friction for sliding
             # )
